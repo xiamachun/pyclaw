@@ -253,31 +253,30 @@ class WeChatPersonalClient:
             logger.info("login() 已 monkey-patch 到 Core class（移除 alive/isLogging 锁）")
 
             # ── monkey-patch check_login 增加诊断日志 ─────────────
-            # 必须同时 patch 模块级函数和实例属性，确保生效
+            # itchat binds module-level functions to core via load_login():
+            #   core.check_login = login.check_login
+            # Python auto-binds them as methods, so self.check_login()
+            # passes self automatically. We patch the module function
+            # then re-bind via load_login() to keep the binding correct.
             from itchat.components import login as _login_mod
             _core = getattr(itchat, 'instance', itchat)
             _orig_check_login_fn = _login_mod.check_login
 
-            def _patched_check_login(self_or_uuid=None, uuid=None):
-                # 兼容两种调用方式: self.check_login() 和 check_login(self, uuid)
-                if uuid is None and self_or_uuid is not None and not isinstance(self_or_uuid, str):
-                    # 调用方式: check_login(core_instance)
-                    _self = self_or_uuid
-                    _uuid = None
-                else:
-                    _self = _core
-                    _uuid = self_or_uuid
+            def _patched_check_login(core_self, uuid=None):
                 try:
-                    status = _orig_check_login_fn(_self, _uuid)
-                except Exception as e:
-                    logger.warning(f"check_login 异常: {e}")
+                    status = _orig_check_login_fn(core_self, uuid)
+                except Exception as exc:
+                    logger.warning("check_login error: %s", exc)
                     return '400'
-                logger.info(f"check_login → status={status}")
+                # Only log non-201 to avoid flooding (201 = waiting for confirm)
+                if status != '201':
+                    logger.info("check_login -> status=%s", status)
                 return status
 
-            # patch 到实例上（self.check_login() 会用这个）
-            _core.check_login = lambda uuid=None: _patched_check_login(_core, uuid)
-            logger.info("check_login 已 monkey-patch 到 itchat core instance")
+            # Patch module-level function, then re-bind to core instance
+            _login_mod.check_login = _patched_check_login
+            _core.check_login = _patched_check_login
+            logger.info("check_login patched (module + core instance)")
 
             # ── monkey-patch process_login_info 修复 wxsid cookies 缺失 ───
             # itchat-uos 的 UOS patch 用 cookies 取代了 XML 解析，
@@ -384,16 +383,21 @@ class WeChatPersonalClient:
             #   1) get_QR() 首次生成时: status="0", qrcode=png_bytes
             #   2) check_login 轮询时: status="200"/"201"/"408" 等
             # 我们在 status=="0" 和外层循环重新生成 QR 时都更新 base64
+            _last_qr_status = [None]  # mutable container for closure
+
             def qr_callback(uuid=None, status=None, qrcode=None):
                 if status == "0" and qrcode:
                     encoded = base64.b64encode(qrcode).decode("utf-8")
                     self._qr_base64 = f"data:image/png;base64,{encoded}"
                     self._qr_ready.set()
-                    logger.info("微信登录二维码已生成 (status=0)")
+                    logger.info("WeChat QR code generated (status=0)")
                 elif status == "201":
-                    logger.info("手机已扫码，等待确认...")
+                    # Only log once to avoid flooding
+                    if _last_qr_status[0] != "201":
+                        logger.info("QR scanned, waiting for phone confirmation...")
                 elif status == "200":
-                    logger.info("登录确认成功 (status=200)")
+                    logger.info("Login confirmed (status=200)")
+                _last_qr_status[0] = status
 
             use_hot_reload = pkl_path.exists()
             logger.info(f"微信登录: hotReload={use_hot_reload}, cache_exists={pkl_path.exists()}")
@@ -423,8 +427,11 @@ class WeChatPersonalClient:
                 def _stop_login_loop():
                     if not _login_deadline.wait(timeout=180):
                         if not self._logged_in:
-                            logger.warning("微信登录超过 3 分钟未成功，中断 itchat 登录循环")
-                            itchat.isLogging = False
+                            logger.warning(
+                                "WeChat login timed out after 3 minutes, "
+                                "interrupting itchat login loop"
+                            )
+                            _core.isLogging = False
 
                 timer_thread = threading.Thread(target=_stop_login_loop, daemon=True)
                 timer_thread.start()

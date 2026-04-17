@@ -12,6 +12,12 @@ python-dotenv>=1.0.0
 apscheduler>=3.10.0
 watchfiles>=1.0.0
 pyyaml>=6.0.0
+sqlalchemy>=2.0.0
+urllib3>=2.0.0
+requests>=2.31.0
+
+# Channel: WeChat Personal (itchat-uos)
+itchat-uos>=1.5.0
 
 # Development & Testing
 pytest>=8.0.0
