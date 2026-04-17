@@ -1,0 +1,3241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyClaw</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:          #f5f5f5;
+            --bg-secondary:#fafafa;
+            --sidebar-bg:  #ffffff;
+            --chat-bg:     #ffffff;
+            --border:      #e8e8e8;
+            --accent:      #1677ff;
+            --accent-light:#e6f0ff;
+            --text:        #1a1a1a;
+            --text-muted:  #8c8c8c;
+            --text-light:  #bfbfbf;
+            --user-bubble: #1677ff;
+            --ai-bubble:   #f0f0f0;
+            --hover:       #f5f5f5;
+            --active:      #e6f0ff;
+            --danger:      #ff4d4f;
+            --success:     #52c41a;
+            --warning:     #faad14;
+            --radius:      10px;
+            --sidebar-w:   260px;
+        }
+
+        /* ── 深色主题 ── */
+        [data-theme="dark"] {
+            --bg:          #1a1a2e;
+            --bg-secondary:#1a2744;
+            --sidebar-bg:  #16213e;
+            --chat-bg:     #0f3460;
+            --border:      #2a2a4a;
+            --accent:      #4d9fff;
+            --accent-light:#1a3a5c;
+            --text:        #e0e0e0;
+            --text-muted:  #8888aa;
+            --text-light:  #555577;
+            --user-bubble: #4d9fff;
+            --ai-bubble:   #1e2a4a;
+            --hover:       #1e2a4a;
+            --active:      #1a3a5c;
+            --danger:      #ff6b6b;
+            --success:     #69db7c;
+            --warning:     #ffd43b;
+        }
+        [data-theme="dark"] .input-box { background: #1e2a4a; }
+        [data-theme="dark"] #message-input { color: var(--text); }
+        [data-theme="dark"] .modal { background: #16213e; }
+        [data-theme="dark"] .tool-card { background: #1e2a4a; }
+        [data-theme="dark"] .tool-card-header { background: #16213e; }
+        [data-theme="dark"] .quick-btn { background: #1e2a4a; color: var(--text); }
+        [data-theme="dark"] .btn { background: #1e2a4a; color: var(--text); }
+
+        html, body { height: 100%; overflow: hidden; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+        }
+
+        /* ═══════════════════════════════════════
+           LEFT SIDEBAR
+        ═══════════════════════════════════════ */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        /* Top nav items */
+        .nav-section {
+            padding: 12px 8px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text);
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .nav-item:hover { background: var(--hover); }
+        .nav-item.primary {
+            color: var(--accent);
+            font-weight: 500;
+        }
+        .nav-item.primary:hover { background: var(--accent-light); }
+        .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+        .nav-item .nav-label { flex: 1; }
+        .nav-item .nav-badge {
+            font-size: 11px;
+            padding: 1px 7px;
+            border-radius: 10px;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 500;
+        }
+        .nav-item .nav-badge.beta {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        /* Tab switcher */
+        .tab-bar {
+            display: flex;
+            padding: 8px 8px 0;
+            gap: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 7px 0;
+            border: none;
+            background: none;
+            border-radius: 6px 6px 0 0;
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+        }
+        .tab-btn:hover { color: var(--text); background: var(--hover); }
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* Session list */
+        .session-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 6px 8px;
+        }
+
+        .session-group-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 10px 8px 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .session-group-label:hover { color: var(--text); }
+
+        .session-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text);
+            transition: background 0.15s;
+            position: relative;
+        }
+        .session-item:hover { background: var(--hover); }
+        .session-item.active { background: var(--active); color: var(--accent); }
+        .session-item .si-icon { font-size: 14px; flex-shrink: 0; color: var(--text-muted); }
+        .session-item.active .si-icon { color: var(--accent); }
+        .session-item .si-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .session-item .si-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+            flex-shrink: 0;
+        }
+        .session-item .si-time {
+            font-size: 11px;
+            color: var(--text-light);
+            flex-shrink: 0;
+        }
+        .session-item .si-delete {
+            display: none;
+            font-size: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 2px 4px;
+            border-radius: 4px;
+            line-height: 1;
+        }
+        .session-item:hover .si-delete { display: inline-block; }
+        .session-item .si-delete:hover { color: var(--danger); background: rgba(255,77,79,0.1); }
+
+        /* User footer */
+        .sidebar-footer {
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+        .sidebar-footer:hover { background: var(--hover); }
+        .avatar-sm {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .footer-info { flex: 1; overflow: hidden; }
+        .footer-name { font-size: 13px; font-weight: 500; }
+        .footer-plan { font-size: 11px; color: var(--text-muted); }
+        .footer-settings { color: var(--text-muted); font-size: 16px; }
+
+        /* ═══════════════════════════════════════
+           MAIN CHAT AREA
+        ═══════════════════════════════════════ */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--chat-bg);
+        }
+
+        /* Chat header */
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .chat-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .chat-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 32px; height: 32px;
+            border: none;
+            background: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: var(--text-muted);
+            transition: background 0.15s;
+        }
+        .icon-btn:hover { background: var(--hover); color: var(--text); }
+        .status-chip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+        .status-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--danger);
+            transition: background 0.3s;
+        }
+        .status-dot.online { background: var(--success); box-shadow: 0 0 5px var(--success); }
+
+        /* ── Header Controls: Platform Selection / Model Selection / Theme / Debug ── */
+        .header-select {
+            height: 30px;
+            padding: 0 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--chat-bg);
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .header-select:hover, .header-select:focus { border-color: var(--accent); }
+
+        .theme-switch-wrap {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .theme-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .theme-switch input { opacity: 0; width: 0; height: 0; }
+        .theme-slider {
+            position: absolute;
+            inset: 0;
+            background: var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.25s;
+        }
+        .theme-slider::before {
+            content: '';
+            position: absolute;
+            width: 14px; height: 14px;
+            left: 3px; top: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.25s;
+        }
+        .theme-switch input:checked + .theme-slider { background: #555; }
+        .theme-switch input:checked + .theme-slider::before { transform: translateX(16px); }
+
+        .debug-btn {
+            height: 30px;
+            padding: 0 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--chat-bg);
+            color: var(--text-muted);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .debug-btn:hover { border-color: var(--warning); color: var(--warning); }
+        .debug-btn.active { border-color: var(--warning); background: #fff7e6; color: #d46b08; }
+        [data-theme="dark"] .debug-btn.active { background: #2a1f00; color: var(--warning); }
+
+        /* Messages */
+        .message-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: var(--text-muted);
+            padding: 40px;
+        }
+        .empty-state .es-icon { font-size: 48px; }
+        .empty-state .es-title { font-size: 18px; font-weight: 600; color: var(--text); }
+        .empty-state .es-desc { font-size: 14px; text-align: center; max-width: 360px; line-height: 1.6; }
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+        .quick-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+        .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+        /* Message rows */
+        .msg-row { display: flex; gap: 10px; align-items: flex-start; }
+        .msg-row.user { flex-direction: row-reverse; }
+        .msg-row.system { justify-content: center; }
+
+        .msg-avatar {
+            width: 34px; height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            flex-shrink: 0;
+            background: var(--ai-bubble);
+            border: 1px solid var(--border);
+        }
+        .msg-row.user .msg-avatar {
+            background: var(--user-bubble);
+            border-color: var(--user-bubble);
+        }
+
+        .msg-body { display: flex; flex-direction: column; gap: 4px; max-width: 72%; }
+        .msg-row.user .msg-body { align-items: flex-end; }
+
+        .msg-sender {
+            font-size: 12px;
+            color: var(--text-muted);
+            padding: 0 4px;
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.7;
+            word-break: break-word;
+        }
+        .msg-row.user .bubble {
+            background: var(--user-bubble);
+            color: #fff;
+            border-bottom-right-radius: 3px;
+        }
+        .msg-row.assistant .bubble {
+            background: var(--ai-bubble);
+            color: var(--text);
+            border-bottom-left-radius: 3px;
+        }
+        .msg-row.system .bubble {
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 4px 12px;
+            border: 1px dashed var(--border);
+            border-radius: 20px;
+        }
+
+        /* Markdown in bubbles */
+        .bubble h1,.bubble h2,.bubble h3 { margin: 10px 0 5px; font-weight: 600; }
+        .bubble h1 { font-size: 1.1em; }
+        .bubble h2 { font-size: 1.05em; }
+        .bubble h3 { font-size: 1em; }
+        .bubble p { margin: 5px 0; }
+        .bubble ul,.bubble ol { padding-left: 18px; margin: 5px 0; }
+        .bubble li { margin: 3px 0; }
+        .bubble strong { font-weight: 600; }
+        .bubble code {
+            background: rgba(0,0,0,0.08);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: 'SF Mono','Fira Code',monospace;
+            font-size: 0.87em;
+        }
+        .msg-row.user .bubble code { background: rgba(255,255,255,0.2); }
+        .bubble pre {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 12px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        .bubble pre code { background: none; color: #d4d4d4; font-size: 0.85em; }
+        .bubble table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+        .bubble th,.bubble td { border: 1px solid var(--border); padding: 6px 10px; }
+        .bubble th { background: rgba(0,0,0,0.04); font-weight: 600; }
+        .bubble blockquote { border-left: 3px solid var(--accent); padding-left: 10px; color: var(--text-muted); margin: 6px 0; }
+        .bubble a { color: var(--accent); }
+        .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+
+        /* Message actions */
+        .msg-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.15s;
+            padding: 0 4px;
+        }
+        .msg-row:hover .msg-actions { opacity: 1; }
+        .msg-action-btn {
+            width: 26px; height: 26px;
+            border: none;
+            background: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .msg-action-btn:hover { background: var(--hover); color: var(--text); }
+
+        /* Tool cards */
+        .tool-row {
+            display: flex;
+            padding-left: 44px;
+        }
+        .tool-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            overflow: hidden;
+            max-width: 80%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .tool-card-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: #fafafa;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+            font-family: 'SF Mono',monospace;
+            font-size: 12px;
+        }
+        .tool-card details summary {
+            cursor: pointer;
+            padding: 7px 12px;
+            color: var(--text-muted);
+            font-size: 12px;
+            user-select: none;
+            list-style: none;
+        }
+        .tool-card details summary::-webkit-details-marker { display: none; }
+        .tool-card details summary::before { content: '▶  '; font-size: 9px; }
+        .tool-card details[open] summary::before { content: '▼  '; }
+        .tool-result-body {
+            padding: 10px 12px;
+            background: #1e1e1e;
+            max-height: 220px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'SF Mono',monospace;
+            font-size: 12px;
+            color: #d4d4d4;
+        }
+
+        /* Status / thinking */
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-left: 44px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-style: italic;
+        }
+        .typing-dots span {
+            display: inline-block;
+            width: 5px; height: 5px;
+            border-radius: 50%;
+            background: var(--text-light);
+            margin: 0 1px;
+            animation: bounce 1.2s infinite;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%,80%,100% { transform: translateY(0); }
+            40% { transform: translateY(-5px); }
+        }
+
+        /* ═══════════════════════════════════════
+           INPUT AREA
+        ═══════════════════════════════════════ */
+        .input-section {
+            padding: 16px 20px 20px;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .input-box {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-box:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(22,119,255,0.1);
+        }
+        #message-input {
+            width: 100%;
+            padding: 14px 16px 8px;
+            border: none;
+            background: none;
+            font-size: 14px;
+            color: var(--text);
+            resize: none;
+            min-height: 48px;
+            max-height: 140px;
+            line-height: 1.6;
+            font-family: inherit;
+            outline: none;
+        }
+        #message-input::placeholder { color: var(--text-light); }
+        #im-message-input {
+            width: 100%;
+            padding: 14px 16px 8px;
+            border: none;
+            background: none;
+            font-size: 14px;
+            color: var(--text);
+            resize: none;
+            min-height: 48px;
+            max-height: 140px;
+            line-height: 1.6;
+            font-family: inherit;
+            outline: none;
+            box-sizing: border-box;
+        }
+        #im-message-input::placeholder { color: var(--text-light); }
+        .input-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px 10px;
+        }
+        .input-tools {
+            display: flex;
+            gap: 4px;
+        }
+        .input-tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border: none;
+            background: none;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .input-tool-btn:hover { background: var(--hover); color: var(--text); }
+        .input-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            background: none;
+        }
+        .model-selector:hover { border-color: var(--accent); color: var(--accent); }
+        .send-btn {
+            width: 34px; height: 34px;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: opacity 0.15s;
+        }
+        .send-btn:hover { opacity: 0.85; }
+        .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .stop-btn {
+            width: 34px; height: 34px;
+            border: none;
+            border-radius: 8px;
+            background: #ff4d4f;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: opacity 0.15s;
+        }
+        .stop-btn:hover { opacity: 0.85; }
+        .hidden { display: none !important; }
+        
+        /* Mode Selector Dropdown */
+        .mode-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .mode-dropdown-content {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            min-width: 160px;
+            z-index: 50;
+            margin-bottom: 6px;
+            overflow: hidden;
+        }
+        .mode-dropdown-content.open { display: block; }
+        .mode-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--text);
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+        .mode-dropdown-item:hover { background: var(--hover); }
+        .mode-dropdown-item.active { color: var(--accent); font-weight: 500; }
+        .mode-dropdown-item .mode-icon { font-size: 14px; }
+        .mode-dropdown-item .mode-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* ═══════════════════════════════════════
+           MODAL (Skills / Scheduled Tasks)
+        ═══════════════════════════════════════ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 14px;
+            width: 560px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-title { font-size: 16px; font-weight: 600; }
+        .modal-close {
+            width: 28px; height: 28px;
+            border: none;
+            background: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { background: var(--hover); }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .btn { padding: 7px 16px; border-radius: 7px; font-size: 14px; cursor: pointer; border: 1px solid var(--border); background: #fff; color: var(--text); transition: all 0.15s; }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn.primary:hover { opacity: 0.85; }
+
+        /* Skill cards */
+        .skill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .skill-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .skill-card:hover { border-color: var(--accent); background: var(--accent-light); }
+        .skill-card.active { border-color: var(--accent); background: var(--accent-light); }
+        .skill-icon { font-size: 24px; margin-bottom: 6px; }
+        .skill-name { font-size: 14px; font-weight: 500; }
+        .skill-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+        /* Skill marketplace styles */
+        .skill-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        .skill-tab {
+            padding: 10px 16px;
+            border: none;
+            background: none;
+            font-size: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+        }
+        .skill-tab:hover { color: var(--text); }
+        .skill-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            font-weight: 500;
+        }
+        .skill-search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .skill-search-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            background: var(--chat-bg);
+            color: var(--text);
+        }
+        .skill-search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .skill-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .skill-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--chat-bg);
+            transition: all 0.15s;
+        }
+        .skill-item:hover {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+        .skill-item-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: var(--accent-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+        .skill-item-info {
+            flex: 1;
+            overflow: hidden;
+        }
+        .skill-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .skill-item-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .skill-item-meta {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+        .skill-item-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .skill-btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+        .skill-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .skill-btn.primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .skill-btn.primary:hover {
+            opacity: 0.85;
+        }
+        .skill-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .skill-detail-modal {
+            width: 520px !important;
+        }
+        .skill-detail-header {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .skill-detail-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 12px;
+            background: var(--accent-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            flex-shrink: 0;
+        }
+        .skill-detail-info {
+            flex: 1;
+        }
+        .skill-detail-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .skill-detail-summary {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .skill-detail-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .skill-tag {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+        .skill-detail-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        .skill-detail-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .skill-detail-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 12px;
+        }
+        .skill-detail-meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .skill-detail-meta-label {
+            color: var(--text-muted);
+        }
+        .skill-detail-meta-value {
+            color: var(--text);
+            font-weight: 500;
+        }
+        .skill-loading {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-muted);
+        }
+        .skill-empty {
+            text-align: center;
+            padding: 50px 0;
+            color: var(--text-muted);
+        }
+        .skill-empty-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+        .skill-empty-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+        .skill-empty-desc {
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        /* Cron task list */
+        .cron-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .cron-icon { font-size: 20px; }
+        .cron-info { flex: 1; }
+        .cron-name { font-size: 14px; font-weight: 500; }
+        .cron-schedule { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .cron-status {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 10px;
+        }
+        .cron-status.running { background: #f6ffed; color: var(--success); border: 1px solid #b7eb8f; }
+        .cron-status.paused { background: #fff7e6; color: var(--warning); border: 1px solid #ffd591; }
+        [data-theme="dark"] .cron-status.running { background: #1a3a2a; color: var(--success); border-color: #2d5a3d; }
+        [data-theme="dark"] .cron-status.paused { background: #3a3020; color: var(--warning); border-color: #5a4a2d; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ccc; }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     LEFT SIDEBAR
+═══════════════════════════════════════ -->
+<aside class="sidebar">
+    <!-- Top nav -->
+    <div class="nav-section">
+        <div class="nav-item primary" onclick="newSession()">
+            <span class="nav-icon">＋</span>
+            <span class="nav-label">New Task</span>
+        </div>
+        <div class="nav-item" onclick="openSkillsModal()">
+            <span class="nav-icon">🔧</span>
+            <span class="nav-label">Skills</span>
+        </div>
+        <div class="nav-item" onclick="openCronModal()">
+            <span class="nav-icon">⏰</span>
+            <span class="nav-label">Scheduled Tasks</span>
+        </div>
+        <div class="nav-item" onclick="openChannelModal()">
+            <span class="nav-icon">💬</span>
+            <span class="nav-label">IM Channels</span>
+        </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tasks', this)">
+            ☑ Tasks
+        </button>
+        <button class="tab-btn" onclick="switchTab('channels', this)">
+            ◎ Channels
+        </button>
+    </div>
+
+    <!-- Session list -->
+    <div class="session-list" id="session-list">
+        <!-- populated by JS -->
+    </div>
+
+    <!-- Footer -->
+    <div class="sidebar-footer">
+        <div class="avatar-sm">U</div>
+        <div class="footer-info">
+            <div class="footer-name">User</div>
+            <div class="footer-plan">Standard Plan</div>
+        </div>
+        <span class="footer-settings">⚙</span>
+    </div>
+</aside>
+
+<!-- ═══════════════════════════════════════
+     MAIN CHAT
+═══════════════════════════════════════ -->
+<main class="chat-main">
+    <!-- Header -->
+    <div class="chat-header">
+        <div>
+            <div class="chat-title" id="chat-title">New Task</div>
+            <div class="chat-subtitle" id="chat-subtitle">Describe your task, AI will help you complete it</div>
+        </div>
+        <div class="header-actions">
+            <!-- Platform Selection -->
+            <select class="header-select" id="platform-select" onchange="onPlatformChange(this.value)" title="Model Platform">
+                <option value="local">LOCAL</option>
+            </select>
+            <!-- Model Selection -->
+            <select class="header-select" id="model-select" onchange="onModelChange(this.value)" title="Model">
+            </select>
+            <!-- Theme Toggle -->
+            <div class="theme-switch-wrap" title="Light/Dark theme">
+                <span>☀</span>
+                <label class="theme-switch">
+                    <input type="checkbox" id="theme-toggle" onchange="onThemeToggle(this.checked)">
+                    <span class="theme-slider"></span>
+                </label>
+                <span>🌙</span>
+            </div>
+            <!-- Debug Log Toggle -->
+            <button class="debug-btn" id="debug-btn" onclick="onDebugToggle()" title="Toggle Debug Logs">🐛 Debug</button>
+            <!-- Connection Status -->
+            <div class="status-chip">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="status-text">Connecting…</span>
+            </div>
+            <button class="icon-btn" title="Feedback">⚑</button>
+            <button class="icon-btn" title="Settings">⚙</button>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="message-area" id="message-area">
+        <div class="empty-state" id="empty-state">
+            <div class="es-icon">🐾</div>
+            <div class="es-title">PyClaw AI Assistant</div>
+            <div class="es-desc">Describe your task, I can help you execute code, search information, process files, or answer any questions.</div>
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="quickSend('Help me analyze the file structure of the current working directory')">📁 Analyze File Structure</button>
+                <button class="quick-btn" onclick="quickSend('Help me write a Python script')">🐍 Write Python Script</button>
+                <button class="quick-btn" onclick="quickSend('Search for the latest AI news')">🔍 Search Information</button>
+                <button class="quick-btn" onclick="quickSend('Hello, introduce yourself')">👋 Learn About PyClaw</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-section">
+        <div class="input-box">
+            <textarea id="message-input" rows="1" placeholder="Describe task, / to invoke skills and tools, standard mode is cost-effective"></textarea>
+            <div class="input-toolbar">
+                <div class="input-tools">
+                    <button class="input-tool-btn" title="Select Working Directory">📁 Select Working Directory</button>
+                    <button class="input-tool-btn" title="Skills">🔧</button>
+                    <button class="input-tool-btn" title="Attachments">📎</button>
+                </div>
+                <div class="input-right">
+                    <div class="mode-dropdown">
+                        <button class="model-selector" id="mode-selector-btn" onclick="toggleModeDropdown()">⚡ Standard ▾</button>
+                        <div class="mode-dropdown-content" id="mode-dropdown">
+                            <button class="mode-dropdown-item active" data-mode="standard" onclick="selectMode('standard')">
+                                <span class="mode-icon">⚡</span>
+                                <div>
+                                    <div>Standard Mode</div>
+                                    <div class="mode-desc">Cost-effective, suitable for daily tasks</div>
+                                </div>
+                            </button>
+                            <button class="mode-dropdown-item" data-mode="fast" onclick="selectMode('fast')">
+                                <span class="mode-icon">⚡⚡</span>
+                                <div>
+                                    <div>Fast Mode</div>
+                                    <div class="mode-desc">Faster response, prioritizes simple tasks</div>
+                                </div>
+                            </button>
+                            <button class="mode-dropdown-item" data-mode="precise" onclick="selectMode('precise')">
+                                <span class="mode-icon">🎯</span>
+                                <div>
+                                    <div>Precise Mode</div>
+                                    <div class="mode-desc">Higher accuracy, prioritizes complex tasks</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+                    <button class="stop-btn hidden" id="stop-btn" onclick="cancelGeneration()">■</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Skills Full-Screen View (hidden by default) -->
+<div id="skills-view" style="display: none; flex: 1; flex-direction: column; height: 100%;">
+    <div class="chat-header">
+        <div>
+            <div class="chat-title">🔧 Skills Management</div>
+            <div class="chat-subtitle">Search, install and manage your skills</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn primary" onclick="refreshSkills()" style="font-size: 13px;">🔄 Refresh</button>
+            <button class="btn" onclick="showMainChat()" style="font-size: 13px;">✕ Close</button>
+        </div>
+    </div>
+    <div style="flex: 1; overflow-y: auto; padding: 0;">
+        <div class="skill-tabs" style="padding: 0 20px;">
+            <button class="skill-tab active" onclick="switchSkillTab('marketplace', this)">Skills Marketplace</button>
+            <button class="skill-tab" onclick="switchSkillTab('installed', this)">Installed</button>
+        </div>
+        <div id="skill-tab-marketplace" style="padding: 0 20px 20px;">
+            <div class="skill-search-box">
+                <input type="text" class="skill-search-input" id="skill-search-input"
+                       placeholder="Search skills..." onkeydown="if(event.key==='Enter')searchSkills()">
+                <button class="skill-btn primary" onclick="searchSkills()">Search</button>
+            </div>
+            <div id="skill-marketplace-list" class="skill-list" style="max-height: none;">
+                <div class="skill-loading">
+                    <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                    <div>Loading…</div>
+                </div>
+            </div>
+        </div>
+        <div id="skill-tab-installed" style="padding: 0 20px 20px; display: none;">
+            <div id="skill-installed-list" class="skill-list" style="max-height: none;">
+                <div class="skill-loading">
+                    <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                    <div>Loading…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cron Full-Screen View (hidden by default) -->
+<div id="cron-view" style="display: none; flex: 1; flex-direction: column; height: 100%;">
+    <div class="chat-header">
+        <div>
+            <div class="chat-title">⏰ Scheduled Tasks</div>
+            <div class="chat-subtitle">Manage your scheduled tasks</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn primary" onclick="quickSend('Help me create a scheduled task'); showMainChat();" style="font-size: 13px;">＋ New Task</button>
+            <button class="btn" onclick="showMainChat()" style="font-size: 13px;">✕ Close</button>
+        </div>
+    </div>
+    <div style="flex: 1; overflow-y: auto; padding: 20px;">
+        <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+            Automatically execute tasks on schedule, or trigger manually at any time.
+        </div>
+        <div id="cron-list">
+        </div>
+    </div>
+</div>
+
+<!-- IM Channel Chat View (hidden by default) -->
+<div id="im-chat-view" style="display: none; flex: 1; flex-direction: column; height: 100%;">
+    <div class="chat-header">
+        <div>
+            <div class="chat-title" id="im-chat-title">💬 IM Channels</div>
+            <div class="chat-subtitle" id="im-chat-subtitle">Select a user on the left to view conversation</div>
+        </div>
+        <div class="header-actions">
+            <div class="status-chip">
+                <div class="status-dot" id="im-status-dot" style="background: #22c55e;"></div>
+                <span id="im-status-text">Connected</span>
+            </div>
+        </div>
+    </div>
+    <div class="message-area" id="im-message-area" style="flex: 1; overflow-y: auto;">
+        <div class="empty-state">
+            <div class="es-icon">💬</div>
+            <div class="es-title">IM Channel Chat</div>
+            <div class="es-desc">Select a user on the left to view chat history, or send a message directly</div>
+        </div>
+    </div>
+    <div class="input-section" style="width: 100%; max-width: 100%; padding: 0 20px 20px;">
+        <div class="input-box">
+            <textarea id="im-message-input" rows="1" placeholder="Type message to DingTalk..." onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendImMessage();}"></textarea>
+            <div class="input-toolbar">
+                <div class="input-tools">
+                    <span style="font-size: 12px; color: var(--text-muted);" id="im-channel-label">DingTalk</span>
+                </div>
+                <div class="input-right">
+                    <button class="send-btn" onclick="sendImMessage()">↑</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</main>
+
+<!-- ═══════════════════════════════════════
+     MODALS
+═══════════════════════════════════════ -->
+
+<!-- Skill Detail Modal (kept as overlay for detail view) -->
+<div class="modal-overlay" id="skill-detail-modal" onclick="closeModalOnBg(event, 'skill-detail-modal')">
+    <div class="modal skill-detail-modal">
+        <div class="modal-header">
+            <span class="modal-title">Skill Details</span>
+            <button class="modal-close" onclick="closeModal('skill-detail-modal')">×</button>
+        </div>
+        <div class="modal-body" id="skill-detail-body">
+            <div class="skill-loading">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                <div>Loading…</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('skill-detail-modal')">Close</button>
+            <button class="btn primary" id="skill-install-btn" onclick="installCurrentSkill()">Install</button>
+        </div>
+    </div>
+</div>
+
+<!-- Channel Modal (deprecated - now using full-screen view) -->
+<div class="modal-overlay" id="channel-modal" style="display:none;"></div>
+
+<script>
+    // ── Marked config ─────────────────────────────────────────────────────
+    marked.setOptions({ breaks: true, gfm: true });
+
+    function renderMd(text) {
+        const r = marked.parse(text || '');
+        return typeof r === 'string' ? r : (text || '');
+    }
+
+    // ── Session management ────────────────────────────────────────────────
+    const SESSION_KEY = 'pyclaw_session_id';
+    const SESSIONS_KEY = 'pyclaw_sessions';
+
+    let sessions = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+    let currentSessionId = null;
+
+    function saveSessions() {
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    }
+
+    function newSession() {
+        // Switch back to main chat view
+        showMainChat();
+
+        // Clear chat UI
+        const area = document.getElementById('message-area');
+        area.innerHTML = '';
+        area.appendChild(createEmptyState());
+        document.getElementById('chat-title').textContent = 'New Task';
+        document.getElementById('chat-subtitle').textContent = 'Describe your task, AI will help you complete it';
+
+        // Clear session_id so server creates a new one
+        sessionStorage.removeItem(SESSION_KEY);
+        currentSessionId = null;
+
+        // Reconnect to get new session
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+        }
+        setTimeout(connectWebSocket, 300);
+    }
+
+    function createEmptyState() {
+        const div = document.createElement('div');
+        div.className = 'empty-state';
+        div.id = 'empty-state';
+        div.innerHTML = `
+            <div class="es-icon">🐾</div>
+            <div class="es-title">PyClaw AI Assistant</div>
+            <div class="es-desc">Describe your task, I can help you execute code, search information, process files, or answer any questions.</div>
+            <div class="quick-actions">
+                <button class="quick-btn" onclick="quickSend('Help me analyze the file structure of the current working directory')">📁 Analyze File Structure</button>
+                <button class="quick-btn" onclick="quickSend('Help me write a Python script')">🐍 Write Python Script</button>
+                <button class="quick-btn" onclick="quickSend('Search for the latest AI news')">🔍 Search Information</button>
+                <button class="quick-btn" onclick="quickSend('Hello, introduce yourself')">👋 Learn About PyClaw</button>
+            </div>`;
+        return div;
+    }
+
+    function quickSend(text) {
+        document.getElementById('message-input').value = text;
+        sendMessage();
+    }
+
+    function renderSessionList() {
+        const list = document.getElementById('session-list');
+        if (sessions.length === 0) {
+            list.innerHTML = `<div style="padding: 20px 12px; text-align:center; color: var(--text-muted); font-size: 13px;">No tasks yet, click "New Task" to start</div>`;
+            return;
+        }
+
+        // Group by date
+        const groups = {};
+        sessions.forEach(s => {
+            const d = new Date(s.createdAt);
+            const today = new Date();
+            const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+            let label;
+            if (d.toDateString() === today.toDateString()) label = 'Today';
+            else if (d.toDateString() === yesterday.toDateString()) label = 'Yesterday';
+            else label = `${d.getMonth()+1}/${d.getDate()}`;
+            if (!groups[label]) groups[label] = [];
+            groups[label].push(s);
+        });
+
+        list.innerHTML = '';
+        Object.entries(groups).forEach(([label, items]) => {
+            const groupEl = document.createElement('div');
+            groupEl.innerHTML = `<div class="session-group-label">⏱ ${label}</div>`;
+            items.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'session-item' + (s.id === currentSessionId ? ' active' : '');
+                item.dataset.sid = s.id;
+                item.innerHTML = `
+                    <span class="si-icon">◷</span>
+                    <span class="si-title">${escHtml(s.title)}</span>
+                    ${s.unread ? '<span class="si-dot"></span>' : ''}
+                    <span class="si-delete" title="Delete" onclick="event.stopPropagation(); deleteSession('${s.id}')">✕</span>`;
+                item.onclick = () => switchSession(s.id);
+                groupEl.appendChild(item);
+            });
+            list.appendChild(groupEl);
+        });
+    }
+
+    async function deleteSession(sid) {
+        if (!confirm('Delete this session?')) return;
+
+        // Remove from local sessions list
+        sessions = sessions.filter(s => s.id !== sid);
+        saveSessions();
+
+        // Call backend API to delete server-side data
+        try {
+            await fetch(`/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+        } catch (e) {
+            console.warn('Failed to delete session on server:', e);
+        }
+
+        // If deleting the current session, start a new one
+        if (sid === currentSessionId) {
+            newSession();
+        } else {
+            renderSessionList();
+        }
+    }
+
+    function switchSession(sid) {
+        const s = sessions.find(x => x.id === sid);
+        if (!s) return;
+        currentSessionId = sid;
+        sessionStorage.setItem(SESSION_KEY, sid);
+        document.getElementById('chat-title').textContent = s.title;
+        document.getElementById('chat-subtitle').textContent = `Created at ${new Date(s.createdAt).toLocaleString('en-US')}`;
+        renderSessionList();
+
+        // Reconnect with this session_id
+        if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+        setTimeout(connectWebSocket, 300);
+    }
+
+    function hideAllFullScreenViews() {
+        const chatHeader = document.querySelector('.chat-main > .chat-header');
+        const messageArea = document.getElementById('message-area');
+        const inputSection = document.querySelector('.chat-main > .input-section');
+        const imChatView = document.getElementById('im-chat-view');
+        const skillsView = document.getElementById('skills-view');
+        const cronView = document.getElementById('cron-view');
+
+        if (chatHeader) chatHeader.style.display = 'none';
+        if (messageArea) messageArea.style.display = 'none';
+        if (inputSection) inputSection.style.display = 'none';
+        if (imChatView) imChatView.style.display = 'none';
+        if (skillsView) skillsView.style.display = 'none';
+        if (cronView) cronView.style.display = 'none';
+    }
+
+    function showMainChat() {
+        hideAllFullScreenViews();
+        const chatHeader = document.querySelector('.chat-main > .chat-header');
+        const messageArea = document.getElementById('message-area');
+        const inputSection = document.querySelector('.chat-main > .input-section');
+        if (chatHeader) chatHeader.style.display = '';
+        if (messageArea) messageArea.style.display = '';
+        if (inputSection) inputSection.style.display = '';
+
+        const tasksBtn = document.querySelector('.tab-btn:first-child');
+        if (tasksBtn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            tasksBtn.classList.add('active');
+        }
+        renderSessionList();
+    }
+
+    function switchTab(tab, btn) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        const sessionList = document.getElementById('session-list');
+        hideAllFullScreenViews();
+        
+        if (tab === 'channels') {
+            document.getElementById('im-chat-view').style.display = 'flex';
+            sessionList.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 13px;">Loading...</div>';
+            loadImSidebar();
+        } else {
+            const chatHeader = document.querySelector('.chat-main > .chat-header');
+            const messageArea = document.getElementById('message-area');
+            const inputSection = document.querySelector('.chat-main > .input-section');
+            if (chatHeader) chatHeader.style.display = '';
+            if (messageArea) messageArea.style.display = '';
+            if (inputSection) inputSection.style.display = '';
+            renderSessionList();
+        }
+    }
+
+    // ── WebSocket ─────────────────────────────────────────────────────────
+    let ws = null;
+    let isConnected = false;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT = 10000;
+
+    function connectWebSocket() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const sid = sessionStorage.getItem(SESSION_KEY);
+        const url = `${proto}//${location.host}/ws${sid ? '?session_id=' + encodeURIComponent(sid) : ''}`;
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+            isConnected = true;
+            reconnectAttempts = 0;
+            setStatus(true);
+        };
+        ws.onclose = () => {
+            isConnected = false;
+            setStatus(false);
+            scheduleReconnect();
+        };
+        ws.onerror = e => console.error('WS error', e);
+        ws.onmessage = e => {
+            try { handleMsg(JSON.parse(e.data)); } catch(err) { console.error(err); }
+        };
+    }
+
+    function scheduleReconnect() {
+        if (reconnectTimer) return;
+        reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts - 1), MAX_RECONNECT);
+        document.getElementById('status-text').textContent = `Reconnecting in ${(delay/1000).toFixed(0)}s…`;
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; connectWebSocket(); }, delay);
+    }
+
+    function setStatus(online) {
+        document.getElementById('status-dot').className = 'status-dot' + (online ? ' online' : '');
+        document.getElementById('status-text').textContent = online ? 'Connected' : 'Disconnected';
+    }
+
+    // ── Streaming state ───────────────────────────────────────────────────
+    let streamText = '';
+    let streamBubble = null;
+    let streamRow = null;
+
+    function area() { return document.getElementById('message-area'); }
+
+    function removeEmpty() {
+        const e = document.getElementById('empty-state');
+        if (e) e.remove();
+    }
+
+    function scrollBottom() {
+        const el = area();
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function addSystemMsg(text) {
+        removeEmpty();
+        const row = document.createElement('div');
+        row.className = 'msg-row system';
+        row.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+        area().appendChild(row);
+        scrollBottom();
+    }
+
+    function addUserMsg(text) {
+        removeEmpty();
+        const row = document.createElement('div');
+        row.className = 'msg-row user';
+        row.innerHTML = `
+            <div class="msg-avatar">🧑</div>
+            <div class="msg-body">
+                <div class="bubble">${escHtml(text)}</div>
+            </div>`;
+        area().appendChild(row);
+        scrollBottom();
+    }
+
+    function renderSessionHistory(messages) {
+        // Clear current chat area, render historical messages
+        const chatArea = area();
+        chatArea.innerHTML = '';
+        
+        messages.forEach(msg => {
+            const role = msg.role || '';
+            const content = msg.content || '';
+            
+            if (role === 'user') {
+                const row = document.createElement('div');
+                row.className = 'msg-row user';
+                row.innerHTML = `
+                    <div class="msg-avatar">🧑</div>
+                    <div class="msg-body">
+                        <div class="bubble">${escHtml(content)}</div>
+                    </div>`;
+                chatArea.appendChild(row);
+            } else if (role === 'assistant') {
+                const row = document.createElement('div');
+                row.className = 'msg-row assistant';
+                const body = document.createElement('div');
+                body.className = 'msg-body';
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                bubble.innerHTML = renderMd(content);
+                body.appendChild(bubble);
+                row.innerHTML = `<div class="msg-avatar">🤖</div>`;
+                row.appendChild(body);
+                chatArea.appendChild(row);
+            }
+            // Ignore other roles like system/tool
+        });
+        
+        scrollBottom();
+    }
+
+    function ensureStreamBubble() {
+        if (streamRow) return;
+        removeStatus();
+        streamText = '';
+        const row = document.createElement('div');
+        row.className = 'msg-row assistant';
+        row.id = 'streaming-row';
+        const body = document.createElement('div');
+        body.className = 'msg-body';
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.id = 'streaming-bubble';
+        body.appendChild(bubble);
+        row.innerHTML = `<div class="msg-avatar">🤖</div>`;
+        row.appendChild(body);
+        area().appendChild(row);
+        streamRow = row;
+        streamBubble = bubble;
+    }
+
+    function appendDelta(text) {
+        removeStatus();
+        ensureStreamBubble();
+        streamText += text;
+        streamBubble.innerHTML = renderMd(streamText);
+        scrollBottom();
+    }
+
+    function finalizeStream(finalText) {
+        if (streamBubble) {
+            streamBubble.innerHTML = renderMd(finalText || streamText);
+            streamBubble.removeAttribute('id');
+            streamRow.removeAttribute('id');
+            streamRow = null;
+            streamBubble = null;
+            streamText = '';
+        } else {
+            removeEmpty();
+            const row = document.createElement('div');
+            row.className = 'msg-row assistant';
+            const body = document.createElement('div');
+            body.className = 'msg-body';
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.innerHTML = renderMd(finalText || '');
+            body.appendChild(bubble);
+            row.innerHTML = `<div class="msg-avatar">🤖</div>`;
+            row.appendChild(body);
+            area().appendChild(row);
+        }
+        removeStatus();
+        scrollBottom();
+    }
+
+    function showStatus(icon, text) {
+        removeStatus();
+        const row = document.createElement('div');
+        row.className = 'status-row';
+        row.id = 'agent-status';
+        row.innerHTML = `<span>${icon}</span><span>${escHtml(text)}</span>
+            <div class="typing-dots"><span></span><span></span><span></span></div>`;
+        area().appendChild(row);
+        scrollBottom();
+    }
+
+    function removeStatus() {
+        const el = document.getElementById('agent-status');
+        if (el) el.remove();
+    }
+
+    function addToolCall(name, args) {
+        const row = document.createElement('div');
+        row.className = 'tool-row';
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        card.innerHTML = `
+            <div class="tool-card-header">🔧 <strong>${escHtml(name)}</strong></div>
+            <details>
+                <summary>Parameters</summary>
+                <pre class="tool-result-body">${escHtml(JSON.stringify(args||{}, null, 2))}</pre>
+            </details>`;
+        row.appendChild(card);
+        area().appendChild(row);
+        scrollBottom();
+    }
+
+    function addToolResult(name, content) {
+        const row = document.createElement('div');
+        row.className = 'tool-row';
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        card.innerHTML = `
+            <details>
+                <summary>📋 Result [${escHtml(name)}]</summary>
+                <pre class="tool-result-body">${escHtml(content||'')}</pre>
+            </details>`;
+        row.appendChild(card);
+        area().appendChild(row);
+        scrollBottom();
+    }
+
+    // ── Platform / Model / Theme / Debug State ─────────────────────────────────
+    let currentPlatform = localStorage.getItem('pyclaw_platform') || 'local';
+    let currentModel    = localStorage.getItem('pyclaw_model')    || 'qwen3.5:27b';
+    let debugEnabled    = localStorage.getItem('pyclaw_debug') === 'true';
+    let allProviders = [];
+    let allModels = [];
+
+    async function loadProvidersAndModels() {
+        try {
+            const resp = await fetch('/api/config/providers');
+            const data = await resp.json();
+            allProviders = data.providers || [];
+            allModels = data.models || [];
+
+            const platformSel = document.getElementById('platform-select');
+            if (platformSel) {
+                platformSel.innerHTML = '';
+                allProviders.forEach(provider => {
+                    const opt = document.createElement('option');
+                    opt.value = provider.value;
+                    opt.textContent = provider.label;
+                    platformSel.appendChild(opt);
+                });
+                if (allProviders.length > 0 && !allProviders.find(p => p.value === currentPlatform)) {
+                    currentPlatform = allProviders[0].value;
+                    localStorage.setItem('pyclaw_platform', currentPlatform);
+                }
+                platformSel.value = currentPlatform;
+            }
+
+            updateModelSelect();
+        } catch (error) {
+            console.error('[PyClaw] Failed to load providers:', error);
+        }
+    }
+
+    function updateModelSelect() {
+        const modelSel = document.getElementById('model-select');
+        if (!modelSel) return;
+
+        const filteredModels = allModels.filter(m => m.provider === currentPlatform);
+        modelSel.innerHTML = '';
+        filteredModels.forEach(model => {
+            const opt = document.createElement('option');
+            opt.value = model.id;
+            opt.textContent = model.name;
+            modelSel.appendChild(opt);
+        });
+
+        if (filteredModels.length > 0 && !filteredModels.find(m => m.id === currentModel)) {
+            currentModel = filteredModels[0].id;
+            localStorage.setItem('pyclaw_model', currentModel);
+        }
+        modelSel.value = currentModel;
+    }
+
+    function initHeaderControls() {
+        // Load providers and models from API
+        loadProvidersAndModels();
+
+        // Restore theme
+        const themeToggle = document.getElementById('theme-toggle');
+        const savedTheme = localStorage.getItem('pyclaw_theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (themeToggle) themeToggle.checked = true;
+        }
+        
+        // Restore mode selection
+        const savedMode = localStorage.getItem('pyclaw_mode') || 'standard';
+        if (savedMode !== 'standard') {
+            selectMode(savedMode);
+        }
+
+        // Restore debug state
+        updateDebugBtn();
+    }
+
+    function onPlatformChange(platform) {
+        currentPlatform = platform;
+        localStorage.setItem('pyclaw_platform', platform);
+        updateModelSelect();
+        sendModelUpdate();
+    }
+
+    function onModelChange(model) {
+        currentModel = model;
+        localStorage.setItem('pyclaw_model', model);
+        sendModelUpdate();
+    }
+
+    function sendModelUpdate() {
+        if (!isConnected || !ws) return;
+        ws.send(JSON.stringify({
+            type: 'set_model',
+            platform: currentPlatform,
+            model: currentModel,
+        }));
+        console.log(`[PyClaw] Switched platform=${currentPlatform} model=${currentModel}`);
+    }
+    
+    function sendModeUpdate() {
+        if (!isConnected || !ws) return;
+        ws.send(JSON.stringify({
+            type: 'set_mode',
+            mode: currentMode,
+        }));
+        console.log(`[PyClaw] Synced mode=${currentMode}`);
+    }
+
+    function onThemeToggle(isDark) {
+        const theme = isDark ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('pyclaw_theme', theme);
+    }
+
+    function onDebugToggle() {
+        debugEnabled = !debugEnabled;
+        localStorage.setItem('pyclaw_debug', debugEnabled);
+        updateDebugBtn();
+        if (isConnected && ws) {
+            ws.send(JSON.stringify({ type: 'set_debug', enabled: debugEnabled }));
+        }
+        console.log(`[PyClaw] Debug logs ${debugEnabled ? 'enabled' : 'disabled'}`);
+    }
+
+    function updateDebugBtn() {
+        const btn = document.getElementById('debug-btn');
+        if (!btn) return;
+        if (debugEnabled) {
+            btn.classList.add('active');
+            btn.textContent = '🐛 Debug ON';
+        } else {
+            btn.classList.remove('active');
+            btn.textContent = '🐛 Debug';
+        }
+    }
+
+    // ── Message handler ───────────────────────────────────────────────────
+    function handleMsg(data) {
+        switch (data.type) {
+            case 'session_init':
+                if (data.session_id) {
+                    sessionStorage.setItem(SESSION_KEY, data.session_id);
+                    currentSessionId = data.session_id;
+                    console.log('Session:', data.session_id);
+                    // After connection is established, sync current model/debug state to backend
+                    sendModelUpdate();
+                    sendModeUpdate();
+                    if (debugEnabled && ws) {
+                        ws.send(JSON.stringify({ type: 'set_debug', enabled: true }));
+                    }
+                }
+                break;
+            case 'session_history':
+                // Render restored historical messages
+                if (data.messages && data.messages.length > 0) {
+                    renderSessionHistory(data.messages);
+                }
+                break;
+            case 'channel_update':
+                break;
+            case 'status':
+                const icons = { thinking: '🤔', tool_calling: '🔧', processing: '⚙️' };
+                showStatus(icons[data.status] || '💭', data.content || '');
+                break;
+            case 'text_delta':
+                appendDelta(data.content || '');
+                break;
+            case 'message':
+                finalizeStream(data.content || '');
+                break;
+            case 'stream_end':
+                // Stream ended, finalize current streamBubble (no new content, use accumulated content)
+                finalizeStream(null);
+                break;
+            case 'tool_call':
+                addToolCall(data.tool_name, data.tool_args);
+                break;
+            case 'tool_result':
+                addToolResult(data.tool_name, data.content);
+                break;
+            case 'model_updated':
+                console.log(`[PyClaw] Backend confirmed model switch: ${data.platform}/${data.model}`);
+                // Only show notification when actually switched
+                if (data.changed && data.message) {
+                    addSystemMsg(`✅ ${data.message}`);
+                }
+                break;
+            case 'debug_updated':
+                console.log(`[PyClaw] Backend confirmed debug: ${data.enabled}`);
+                break;
+            case 'mode_updated':
+                console.log(`[PyClaw] Backend confirmed mode: ${data.mode}`);
+                // Optional: show notification
+                // addSystemMsg(data.message);
+                break;
+            case 'skills_list':
+                renderSkillsModal(data.skills || []);
+                break;
+            case 'generation_started':
+                setGenerating(true);
+                break;
+            case 'generation_ended':
+            case 'generation_cancelled':
+                setGenerating(false);
+                removeStatus();  // Clear "thinking..." status
+                if (data.type === 'generation_cancelled') {
+                    addSystemMsg(data.content || 'Cancelled');
+                }
+                break;
+            case 'cancel_acknowledged':
+                console.log('[PyClaw] Cancel acknowledged');
+                break;
+        }
+    }
+
+    // ── Generation state (send/stop button toggle) ─────────────────────────
+    let isGenerating = false;
+    
+    function setGenerating(generating) {
+        isGenerating = generating;
+        const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        if (generating) {
+            sendBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+        } else {
+            sendBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+        }
+    }
+    
+    function cancelGeneration() {
+        if (!isConnected || !ws) return;
+        ws.send(JSON.stringify({ type: 'cancel' }));
+        console.log('[PyClaw] Cancel requested');
+    }
+
+    // ── Mode selector ───────────────────────────────────────────────────────
+    let currentMode = localStorage.getItem('pyclaw_mode') || 'standard';
+    const modeConfig = {
+        standard: { icon: '⚡', label: 'Standard' },
+        fast: { icon: '⚡⚡', label: 'Fast' },
+        precise: { icon: '🎯', label: 'Precise' }
+    };
+    
+    function toggleModeDropdown() {
+        const dropdown = document.getElementById('mode-dropdown');
+        dropdown.classList.toggle('open');
+    }
+    
+    function selectMode(mode) {
+        currentMode = mode;
+        localStorage.setItem('pyclaw_mode', mode);
+        
+        // Update button text
+        const btn = document.getElementById('mode-selector-btn');
+        const cfg = modeConfig[mode];
+        btn.textContent = `${cfg.icon} ${cfg.label} ▾`;
+        
+        // Update active state
+        document.querySelectorAll('.mode-dropdown-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.mode === mode);
+        });
+        
+        // Close dropdown
+        document.getElementById('mode-dropdown').classList.remove('open');
+        
+        // Send mode to backend
+        if (isConnected && ws) {
+            ws.send(JSON.stringify({ type: 'set_mode', mode: mode }));
+        }
+        console.log(`[PyClaw] Switched to ${cfg.label} mode`);
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.mode-dropdown')) {
+            document.getElementById('mode-dropdown')?.classList.remove('open');
+        }
+    });
+
+    // ── Send ──────────────────────────────────────────────────────────────
+    function sendMessage() {
+        const input = document.getElementById('message-input');
+        const text = input.value.trim();
+        if (!text) return;
+        if (!isConnected || !ws) { addSystemMsg('Not connected, please wait…'); return; }
+
+        // Create session record if new
+        if (!currentSessionId) {
+            // session_id will be set when session_init arrives
+        } else {
+            // Update existing session title from first message
+            const s = sessions.find(x => x.id === currentSessionId);
+            if (s && s.title === 'New Task') {
+                s.title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
+                saveSessions();
+                renderSessionList();
+                document.getElementById('chat-title').textContent = s.title;
+            }
+        }
+
+        ws.send(JSON.stringify({ type: 'message', content: text }));
+        addUserMsg(text);
+        input.value = '';
+        input.style.height = 'auto';
+    }
+
+    // After session_init, register session in sidebar
+    const origHandleMsg = handleMsg;
+    function handleMsgWithSession(data) {
+        if (data.type === 'session_init' && data.session_id) {
+            const existing = sessions.find(s => s.id === data.session_id);
+            if (!existing) {
+                sessions.unshift({
+                    id: data.session_id,
+                    title: 'New Task',
+                    createdAt: Date.now(),
+                    unread: false,
+                });
+                saveSessions();
+                renderSessionList();
+            }
+        }
+        origHandleMsg(data);
+    }
+
+    // Override ws message handler to use extended version
+    // (re-assign after ws is created)
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    function escHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
+    }
+
+    // ── Skills & Cron Modals ──────────────────────────────────────────────
+    let currentSkillSlug = null;
+    let currentSkillDetail = null;
+    let marketplaceSkills = [];
+    let installedSkills = [];
+
+    function openSkillsModal() {
+        hideAllFullScreenViews();
+        document.getElementById('skills-view').style.display = 'flex';
+        loadMarketplaceSkills();
+        loadInstalledSkills();
+    }
+
+    function switchSkillTab(tab, btn) {
+        // Update tab buttons
+        document.querySelectorAll('.skill-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Show/hide content
+        document.getElementById('skill-tab-marketplace').style.display = tab === 'marketplace' ? 'block' : 'none';
+        document.getElementById('skill-tab-installed').style.display = tab === 'installed' ? 'block' : 'none';
+
+        if (tab === 'marketplace' && marketplaceSkills.length === 0) {
+            loadMarketplaceSkills();
+        } else if (tab === 'installed') {
+            loadInstalledSkills();
+        }
+    }
+
+    async function loadMarketplaceSkills() {
+        const list = document.getElementById('skill-marketplace-list');
+        list.innerHTML = `
+            <div class="skill-loading">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                <div>Loading…</div>
+            </div>`;
+
+        try {
+            const response = await fetch('/api/skills/marketplace/list?limit=50');
+            if (!response.ok) throw new Error('Failed to load');
+            marketplaceSkills = await response.json();
+            renderMarketplaceSkills(marketplaceSkills);
+        } catch (err) {
+            list.innerHTML = `
+                <div class="skill-empty">
+                    <div class="skill-empty-icon">⚠️</div>
+                    <div class="skill-empty-title">Load Failed</div>
+                    <div class="skill-empty-desc">Cannot connect to skills marketplace, please try again later</div>
+                </div>`;
+        }
+    }
+
+    async function searchSkills() {
+        const query = document.getElementById('skill-search-input').value.trim() || '*';
+        const list = document.getElementById('skill-marketplace-list');
+        list.innerHTML = `
+            <div class="skill-loading">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                <div>搜索中…</div>
+            </div>`;
+
+        try {
+            const response = await fetch(`/api/skills/marketplace/search?query=${encodeURIComponent(query)}&limit=50`);
+            if (!response.ok) throw new Error('Failed to search');
+            marketplaceSkills = await response.json();
+            renderMarketplaceSkills(marketplaceSkills);
+        } catch (err) {
+            list.innerHTML = `
+                <div class="skill-empty">
+                    <div class="skill-empty-icon">⚠️</div>
+                    <div class="skill-empty-title">Search Failed</div>
+                    <div class="skill-empty-desc">Cannot search skills, please try again later</div>
+                </div>`;
+        }
+    }
+
+    function renderMarketplaceSkills(skills) {
+        const list = document.getElementById('skill-marketplace-list');
+        if (skills.length === 0) {
+            list.innerHTML = `
+                <div class="skill-empty">
+                    <div class="skill-empty-icon">🔍</div>
+                    <div class="skill-empty-title">No Skills Found</div>
+                    <div class="skill-empty-desc">Try searching with other keywords</div>
+                </div>`;
+            return;
+        }
+
+        list.innerHTML = skills.map(skill => `
+            <div class="skill-item" onclick="openSkillDetail('${skill.slug}')">
+                <div class="skill-item-icon">🔧</div>
+                <div class="skill-item-info">
+                    <div class="skill-item-name">${escHtml(skill.display_name)}</div>
+                    <div class="skill-item-desc">${escHtml(skill.summary || 'No description')}</div>
+                    <div class="skill-item-meta">
+                        ${skill.version ? `v${escHtml(skill.version)}` : ''}
+                        ${skill.updated_at ? '· ' + formatDate(skill.updated_at) : ''}
+                    </div>
+                </div>
+                <div class="skill-item-actions">
+                    <button class="skill-btn primary" onclick="event.stopPropagation(); installSkill('${skill.slug}')">
+                        Install
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function loadInstalledSkills() {
+        const list = document.getElementById('skill-installed-list');
+        list.innerHTML = `
+            <div class="skill-loading">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                <div>Loading…</div>
+            </div>`;
+
+        try {
+            const response = await fetch('/api/skills/status');
+            if (!response.ok) throw new Error('Failed to load');
+            const data = await response.json();
+            installedSkills = data.installed || [];
+            renderInstalledSkills(installedSkills);
+        } catch (err) {
+            list.innerHTML = `
+                <div class="skill-empty">
+                    <div class="skill-empty-icon">⚠️</div>
+                    <div class="skill-empty-title">Load Failed</div>
+                    <div class="skill-empty-desc">Cannot retrieve installed skills list</div>
+                </div>`;
+        }
+    }
+
+    function renderInstalledSkills(skills) {
+        const list = document.getElementById('skill-installed-list');
+        if (skills.length === 0) {
+            list.innerHTML = `
+                <div class="skill-empty">
+                    <div class="skill-empty-icon">🔧</div>
+                    <div class="skill-empty-title">No Installed Skills</div>
+                    <div class="skill-empty-desc">Go to skills marketplace to discover and install new skills</div>
+                </div>`;
+            return;
+        }
+
+        list.innerHTML = skills.map(skill => `
+            <div class="skill-item">
+                <div class="skill-item-icon">🔧</div>
+                <div class="skill-item-info">
+                    <div class="skill-item-name">${escHtml(skill.name || skill.slug)}</div>
+                    <div class="skill-item-desc">${escHtml(skill.description || 'Locally installed skill')}</div>
+                    <div class="skill-item-meta">
+                        v${escHtml(skill.version)}
+                        ${skill.installed_at ? '· Installed at ' + formatDate(skill.installed_at) : ''}
+                    </div>
+                </div>
+                <div class="skill-item-actions">
+                    <button class="skill-btn" onclick="updateSkill('${skill.slug}')">Update</button>
+                    <button class="skill-btn" style="color: var(--danger);" onclick="uninstallSkill('${skill.slug}')">Uninstall</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function openSkillDetail(slug) {
+        currentSkillSlug = slug;
+        currentSkillDetail = null;
+        openModal('skill-detail-modal');
+
+        const body = document.getElementById('skill-detail-body');
+        const installBtn = document.getElementById('skill-install-btn');
+        body.innerHTML = `
+            <div class="skill-loading">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                <div>Loading details…</div>
+            </div>`;
+        installBtn.textContent = 'Install';
+        installBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/skills/marketplace/detail/${encodeURIComponent(slug)}`);
+            if (!response.ok) throw new Error('Failed to load');
+            const detail = await response.json();
+            currentSkillDetail = detail;
+            renderSkillDetail(detail);
+            installBtn.disabled = false;
+        } catch (err) {
+            body.innerHTML = `
+                <div class="skill-empty">
+                    <div class="skill-empty-icon">⚠️</div>
+                    <div class="skill-empty-title">Load Failed</div>
+                    <div class="skill-empty-desc">Cannot retrieve skill details</div>
+                </div>`;
+        }
+    }
+
+    function renderSkillDetail(detail) {
+        const body = document.getElementById('skill-detail-body');
+        const tagsHtml = detail.tags ? Object.entries(detail.tags).map(([k, v]) =>
+            `<span class="skill-tag">${escHtml(k)}${v ? ': ' + escHtml(v) : ''}</span>`
+        ).join('') : '';
+
+        body.innerHTML = `
+            <div class="skill-detail-header">
+                <div class="skill-detail-icon">🔧</div>
+                <div class="skill-detail-info">
+                    <div class="skill-detail-name">${escHtml(detail.display_name)}</div>
+                    <div class="skill-detail-summary">${escHtml(detail.summary || 'No description')}</div>
+                    ${tagsHtml ? `<div class="skill-detail-tags">${tagsHtml}</div>` : ''}
+                </div>
+            </div>
+            <div class="skill-detail-section">
+                <div class="skill-detail-section-title">Information</div>
+                <div class="skill-detail-meta">
+                    <div class="skill-detail-meta-item">
+                        <span class="skill-detail-meta-label">Identifier</span>
+                        <span class="skill-detail-meta-value">${escHtml(detail.slug)}</span>
+                    </div>
+                    <div class="skill-detail-meta-item">
+                        <span class="skill-detail-meta-label">Latest Version</span>
+                        <span class="skill-detail-meta-value">${escHtml(detail.latest_version || 'Unknown')}</span>
+                    </div>
+                    <div class="skill-detail-meta-item">
+                        <span class="skill-detail-meta-label">Created At</span>
+                        <span class="skill-detail-meta-value">${detail.created_at ? formatDate(detail.created_at) : 'Unknown'}</span>
+                    </div>
+                    <div class="skill-detail-meta-item">
+                        <span class="skill-detail-meta-label">Updated At</span>
+                        <span class="skill-detail-meta-value">${detail.updated_at ? formatDate(detail.updated_at) : 'Unknown'}</span>
+                    </div>
+                </div>
+            </div>
+            ${detail.owner ? `
+            <div class="skill-detail-section">
+                <div class="skill-detail-section-title">Author</div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light);
+                                display: flex; align-items: center; justify-content: center;">
+                        👤
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 500;">${escHtml(detail.owner.display_name || detail.owner.handle || 'Unknown')}</div>
+                        ${detail.owner.handle ? `<div style="font-size: 12px; color: var(--text-muted);">@${escHtml(detail.owner.handle)}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+        `;
+    }
+
+    async function installCurrentSkill() {
+        if (!currentSkillSlug) return;
+        await installSkill(currentSkillSlug);
+        closeModal('skill-detail-modal');
+    }
+
+    async function installSkill(slug) {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = 'Installing…';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/api/skills/install', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug, force: false })
+            });
+            const result = await response.json();
+
+            if (result.ok) {
+                alert(`✅ ${result.message}`);
+                loadInstalledSkills();
+            } else {
+                alert(`❌ Installation failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            alert(`❌ Installation failed: ${err.message}`);
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    async function updateSkill(slug) {
+        if (!confirm(`Are you sure you want to update skill "${slug}"?`)) return;
+
+        try {
+            const response = await fetch('/api/skills/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug })
+            });
+            const results = await response.json();
+            const result = results[0];
+
+            if (result.ok) {
+                alert(`✅ ${result.message}`);
+                loadInstalledSkills();
+            } else {
+                alert(`❌ Update failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            alert(`❌ Update failed: ${err.message}`);
+        }
+    }
+
+    async function uninstallSkill(slug) {
+        if (!confirm(`Are you sure you want to uninstall skill "${slug}"?`)) return;
+
+        try {
+            const response = await fetch('/api/skills/uninstall', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug })
+            });
+            const result = await response.json();
+
+            if (result.ok) {
+                alert(`✅ ${result.message}`);
+                loadInstalledSkills();
+            } else {
+                alert(`❌ Uninstall failed: ${result.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            alert(`❌ Uninstall failed: ${err.message}`);
+        }
+    }
+
+    function refreshSkills() {
+        const activeTab = document.querySelector('.skill-tab.active');
+        if (activeTab.textContent === 'Skills Marketplace') {
+            loadMarketplaceSkills();
+        } else {
+            loadInstalledSkills();
+        }
+    }
+
+    function formatDate(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        if (days === 0) return 'Today';
+        if (days === 1) return 'Yesterday';
+        if (days < 7) return `${days} days ago`;
+        if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function renderSkillsModal(skills) {
+        // Compatible with old code, now using new skills management interface
+        openSkillsModal();
+    }
+
+    function openCronModal() {
+        hideAllFullScreenViews();
+        document.getElementById('cron-view').style.display = 'flex';
+        loadCronJobs();
+    }
+
+    async function loadCronJobs() {
+        const list = document.getElementById('cron-list');
+        if (!list) return;
+        
+        list.innerHTML = `
+            <div style="text-align:center; padding: 40px 0; color: var(--text-muted);">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                <div>Loading…</div>
+            </div>`;
+        
+        try {
+            const response = await fetch('/api/cron/jobs');
+            if (!response.ok) throw new Error('Failed to load');
+            const jobs = await response.json();
+            renderCronJobs(jobs);
+        } catch (err) {
+            list.innerHTML = `
+                <div style="text-align:center; padding: 40px 0; color: var(--text-muted);">
+                    <div style="font-size: 36px; margin-bottom: 12px;">⚠️</div>
+                    <div style="font-size: 14px; color: var(--text);">Load Failed</div>
+                    <div style="font-size: 13px;">Please check if Gateway is running</div>
+                </div>`;
+        }
+    }
+
+    function renderCronJobs(jobs) {
+        const list = document.getElementById('cron-list');
+        if (!list) return;
+        
+        if (!jobs || jobs.length === 0) {
+            list.innerHTML = `
+                <div style="text-align:center; padding: 40px 0; color: var(--text-muted);">
+                    <div style="font-size: 36px; margin-bottom: 12px;">⏰</div>
+                    <div style="font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 6px;">No Scheduled Tasks</div>
+                    <div style="font-size: 13px; line-height: 1.7;">
+                        Describe the task you want to execute regularly in a conversation, for example:<br>
+                        <em>"Check server status every morning at 9am"</em><br>
+                        <em>"Generate a data report every Monday"</em>
+                    </div>
+                </div>`;
+            return;
+        }
+        
+        list.innerHTML = jobs.map(job => `
+            <div class="cron-job-item" style="padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 500; color: var(--text);">${escHtml(job.name)}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            ${escHtml(job.description || '')}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-light); margin-top: 4px;">
+                            ⏰ ${formatCronTime(job.trigger_type, job.trigger_args)}
+                            ${job.next_run_time ? ' · Next: ' + formatDateTime(job.next_run_time) : ''}
+                        </div>
+                        <div id="job-status-${job.id}" style="font-size: 11px; margin-top: 4px;"></div>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn" style="padding: 4px 10px; font-size: 12px;" 
+                                onclick="runCronJob('${job.id}')" title="Execute Now">▶️</button>
+                        <button class="btn" style="padding: 4px 10px; font-size: 12px;" 
+                                onclick="editCronJob('${job.id}')" title="Edit">✏️</button>
+                        <button class="btn" style="padding: 4px 10px; font-size: 12px;" 
+                                onclick="showJobHistory('${job.id}')" title="Execution History">📋</button>
+                        <button class="btn" style="padding: 4px 10px; font-size: 12px;" 
+                                onclick="deleteCronJob('${job.id}')" title="Delete">🗑️</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        // Load last execution status for each task
+        jobs.forEach(job => loadJobLastStatus(job.id));
+    }
+    
+    async function loadJobLastStatus(jobId) {
+        try {
+            const resp = await fetch(`/api/cron/jobs/${jobId}/history`);
+            const data = await resp.json();
+            const statusEl = document.getElementById(`job-status-${jobId}`);
+            if (!statusEl) return;
+            
+            if (data.history && data.history.length > 0) {
+                const last = data.history[data.history.length - 1];
+                const icon = last.status === 'success' ? '✅' : '❌';
+                const time = formatDateTime(last.timestamp);
+                statusEl.innerHTML = `<span style="color: ${last.status === 'success' ? '#52c41a' : '#ff4d4f'};">${icon} Last: ${time} (${last.duration_ms}ms)</span>`;
+            } else {
+                statusEl.innerHTML = `<span style="color: var(--text-muted);">Never executed</span>`;
+            }
+        } catch (e) {
+            console.error('Failed to load job status:', e);
+        }
+    }
+
+    function formatCronTime(triggerType, args) {
+        if (triggerType === 'cron') {
+            const h = args.hour !== undefined ? String(args.hour).padStart(2, '0') : '*';
+            const m = args.minute !== undefined ? String(args.minute).padStart(2, '0') : '00';
+            const dow = args.day_of_week;
+            if (dow) return `Every ${dow} ${h}:${m}`;
+            return `Daily ${h}:${m}`;
+        } else if (triggerType === 'interval') {
+            if (args.hours) return `Every ${args.hours} hours`;
+            if (args.minutes) return `Every ${args.minutes} minutes`;
+        } else if (triggerType === 'date') {
+            if (args.run_date) {
+                return `One-time: ${args.run_date}`;
+            }
+        }
+        return JSON.stringify(args);
+    }
+
+    function formatDateTime(isoStr) {
+        const d = new Date(isoStr);
+        return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    async function runCronJob(jobId) {
+        try {
+            const resp = await fetch(`/api/cron/jobs/${jobId}/run`, { method: 'POST' });
+            const data = await resp.json();
+            addSystemMsg(`✅ Task triggered (${jobId})`);
+            // Wait a bit before refreshing status
+            setTimeout(() => loadJobLastStatus(jobId), 1000);
+        } catch (e) {
+            addSystemMsg('❌ Execution failed');
+        }
+    }
+    
+    async function showJobHistory(jobId) {
+        try {
+            const resp = await fetch(`/api/cron/jobs/${jobId}/history`);
+            const data = await resp.json();
+            
+            if (!data.history || data.history.length === 0) {
+                alert('No execution records yet');
+                return;
+            }
+            
+            let html = `<div style="max-height: 400px; overflow-y: auto;">`;
+            html += `<table style="width: 100%; border-collapse: collapse; font-size: 12px;">`;
+            html += `<tr style="background: var(--bg-secondary);"><th style="padding: 8px; text-align: left;">Time</th><th style="padding: 8px; text-align: left;">Status</th><th style="padding: 8px; text-align: left;">Duration</th><th style="padding: 8px; text-align: left;">Result</th></tr>`;
+            
+            data.history.slice().reverse().forEach(rec => {
+                const icon = rec.status === 'success' ? '✅' : '❌';
+                const color = rec.status === 'success' ? '#52c41a' : '#ff4d4f';
+                html += `<tr style="border-bottom: 1px solid var(--border);">`;
+                html += `<td style="padding: 6px 8px;">${formatDateTime(rec.timestamp)}</td>`;
+                html += `<td style="padding: 6px 8px; color: ${color};">${icon} ${rec.status}</td>`;
+                html += `<td style="padding: 6px 8px;">${rec.duration_ms}ms</td>`;
+                html += `<td style="padding: 6px 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escHtml(rec.result)}">${escHtml(rec.result.substring(0, 50))}${rec.result.length > 50 ? '...' : ''}</td>`;
+                html += `</tr>`;
+            });
+            
+            html += `</table></div>`;
+            
+            // 简单弹窗显示
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            modal.innerHTML = `
+                <div style="background: var(--bg); border-radius: 12px; padding: 20px; max-width: 600px; width: 90%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;">📋 Execution History</h3>
+                        <button onclick="this.closest('div').parentElement.remove()" style="border: none; background: none; font-size: 20px; cursor: pointer;">×</button>
+                    </div>
+                    ${html}
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } catch (e) {
+            alert('Failed to load history');
+        }
+    }
+    
+    // Edit scheduled task modal
+    let editingJobData = null;
+    
+    async function editCronJob(jobId) {
+        try {
+            // Get task details
+            const resp = await fetch(`/api/cron/jobs`);
+            const jobs = await resp.json();
+            const job = jobs.find(j => j.id === jobId);
+            if (!job) {
+                alert('Task does not exist');
+                return;
+            }
+            editingJobData = job;
+            
+            // Build edit form
+            const triggerArgs = job.trigger_args || {};
+            const hour = triggerArgs.hour !== undefined ? triggerArgs.hour : '';
+            const minute = triggerArgs.minute !== undefined ? triggerArgs.minute : '';
+            const runDate = triggerArgs.run_date || '';
+            
+            const modal = document.createElement('div');
+            modal.id = 'edit-job-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            modal.innerHTML = `
+                <div style="background: var(--bg); border-radius: 12px; padding: 20px; max-width: 400px; width: 90%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;">✏️ Edit Task</h3>
+                        <button onclick="document.getElementById('edit-job-modal').remove()" style="border: none; background: none; font-size: 20px; cursor: pointer;">×</button>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Task Name</label>
+                        <input id="edit-job-name" type="text" value="${escHtml(job.name)}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Description</label>
+                        <textarea id="edit-job-description" rows="3" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; resize: vertical; font-family: inherit;">${escHtml(job.description || '')}</textarea>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Trigger Type</label>
+                        <select id="edit-job-trigger-type" onchange="toggleEditTriggerFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px;">
+                            <option value="cron" ${job.trigger_type === 'cron' ? 'selected' : ''}>Daily Recurring</option>
+                            <option value="date" ${job.trigger_type === 'date' ? 'selected' : ''}>One-time</option>
+                        </select>
+                    </div>
+                    <div id="edit-cron-fields" style="display: ${job.trigger_type === 'cron' ? 'flex' : 'none'}; gap: 8px; margin-bottom: 12px;">
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Hour</label>
+                            <input id="edit-job-hour" type="number" min="0" max="23" value="${hour}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Minute</label>
+                            <input id="edit-job-minute" type="number" min="0" max="59" value="${minute}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;">
+                        </div>
+                    </div>
+                    <div id="edit-date-fields" style="display: ${job.trigger_type === 'date' ? 'block' : 'none'}; margin-bottom: 12px;">
+                        <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Execution Time</label>
+                        <input id="edit-job-rundate" type="datetime-local" value="${runDate ? runDate.replace(' ', 'T').substring(0, 16) : ''}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;">
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                        <button class="btn" onclick="document.getElementById('edit-job-modal').remove()">Cancel</button>
+                        <button class="btn primary" onclick="saveEditedJob('${jobId}')">Save</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } catch (e) {
+            alert('Failed to load task');
+        }
+    }
+    
+    function toggleEditTriggerFields() {
+        const type = document.getElementById('edit-job-trigger-type').value;
+        document.getElementById('edit-cron-fields').style.display = type === 'cron' ? 'flex' : 'none';
+        document.getElementById('edit-date-fields').style.display = type === 'date' ? 'block' : 'none';
+    }
+    
+    async function saveEditedJob(jobId) {
+        const name = document.getElementById('edit-job-name').value;
+        const description = document.getElementById('edit-job-description').value;
+        const triggerType = document.getElementById('edit-job-trigger-type').value;
+        
+        let triggerArgs = {};
+        if (triggerType === 'cron') {
+            triggerArgs = {
+                hour: parseInt(document.getElementById('edit-job-hour').value) || 0,
+                minute: parseInt(document.getElementById('edit-job-minute').value) || 0
+            };
+        } else if (triggerType === 'date') {
+            const dt = document.getElementById('edit-job-rundate').value;
+            if (!dt) {
+                alert('Please select execution time');
+                return;
+            }
+            triggerArgs = { run_date: dt.replace('T', ' ') + ':00' };
+        }
+        
+        try {
+            const resp = await fetch(`/api/cron/jobs/${jobId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    description: description,
+                    trigger_type: triggerType,
+                    trigger_args: triggerArgs
+                })
+            });
+            if (!resp.ok) throw new Error('Update failed');
+            document.getElementById('edit-job-modal').remove();
+            loadCronJobs();  // Refresh list
+            addSystemMsg('✅ Task updated');
+        } catch (e) {
+            alert('Save failed');
+        }
+    }
+
+    async function deleteCronJob(jobId) {
+        if (!confirm('Are you sure you want to delete this scheduled task?')) return;
+        try {
+            await fetch(`/api/cron/jobs/${jobId}`, { method: 'DELETE' });
+            loadCronJobs();  // Refresh list
+        } catch (e) {
+            addSystemMsg('❌ Deletion failed');
+        }
+    }
+
+    // ── Modal ─────────────────────────────────────────────────────────────
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    function closeModalOnBg(e, id) { if (e.target === e.currentTarget) closeModal(id); }
+
+    // ── Textarea auto-resize ──────────────────────────────────────────────
+    document.getElementById('message-input').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 140) + 'px';
+    });
+    // IM input auto-resize
+    const imInput = document.getElementById('im-message-input');
+    if (imInput) {
+        imInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 140) + 'px';
+        });
+    }
+    document.getElementById('message-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    function connectWebSocketPatched() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const sid = sessionStorage.getItem(SESSION_KEY);
+        const url = `${proto}//${location.host}/ws${sid ? '?session_id=' + encodeURIComponent(sid) : ''}`;
+        ws = new WebSocket(url);
+        ws.onopen = () => { isConnected = true; reconnectAttempts = 0; setStatus(true); };
+        ws.onclose = () => { isConnected = false; setStatus(false); scheduleReconnect(); };
+        ws.onerror = e => console.error('WS error', e);
+        ws.onmessage = e => {
+            try { handleMsgWithSession(JSON.parse(e.data)); } catch(err) { console.error(err); }
+        };
+    }
+
+    window.onload = () => {
+        initHeaderControls();
+        renderSessionList();
+        connectWebSocketPatched();
+    };
+
+    // ── IM Channel Full-Screen View ───────────────────────────────────────
+    let currentImChannel = null;
+    let currentImUserId = null;
+    let imPollingTimer = null;
+
+    async function loadImSidebar() {
+        const sessionList = document.getElementById('session-list');
+        if (!sessionList) return;
+        
+        try {
+            const resp = await fetch('/api/channels/status');
+            const data = await resp.json();
+            const channels = data.channels || [];
+            
+            let html = '';
+            for (const ch of channels) {
+                if (!ch.connected) continue;
+                
+                // Channel title
+                html += `<div class="session-group-label">${ch.icon} ${ch.name}</div>`;
+                
+                // Get user list for this channel
+                try {
+                    const sessResp = await fetch(`/api/channels/${ch.id}/sessions`);
+                    const sessData = await sessResp.json();
+                    const sessions = sessData.sessions || [];
+                    
+                    if (sessions.length === 0) {
+                        html += `<div style="padding: 8px 12px 8px 32px; color: var(--text-muted); font-size: 12px;">No conversations</div>`;
+                    } else {
+                        sessions.forEach(s => {
+                            const isActive = currentImChannel === ch.id && currentImUserId === s.user_id;
+                            html += `
+                                <div class="session-item ${isActive ? 'active' : ''}" onclick="selectImUser('${ch.id}', '${ch.name}', '${s.user_id}', ${s.message_count})">
+                                    <span class="si-icon">👤</span>
+                                    <span class="si-title">${s.user_id}</span>
+                                    <span style="font-size: 11px; color: var(--text-muted);">${s.message_count} msgs</span>
+                                </div>`;
+                        });
+                    }
+                } catch (e) {
+                    html += `<div style="padding: 8px 12px 8px 32px; color: var(--text-muted); font-size: 12px;">Load failed</div>`;
+                }
+            }
+            
+            // Disconnected channels
+            const disconnected = channels.filter(ch => !ch.connected);
+            if (disconnected.length > 0) {
+                html += `<div class="session-group-label" style="margin-top: 12px;">Disconnected</div>`;
+                disconnected.forEach(ch => {
+                    if (ch.id === 'wechat_personal' && ch.status !== 'not_installed') {
+                        // WeChat: clickable to scan QR code
+                        html += `
+                            <div class="session-item" style="cursor: pointer;" onclick="startWeChatLogin()">
+                                <span class="si-icon">${ch.icon}</span>
+                                <span class="si-title">${ch.name}</span>
+                                <span style="font-size: 11px; color: #22c55e; font-weight: 500;">Scan to connect</span>
+                            </div>`;
+                    } else {
+                        html += `
+                            <div class="session-item" style="opacity: 0.5;">
+                                <span class="si-icon">${ch.icon}</span>
+                                <span class="si-title">${ch.name}</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">Not configured</span>
+                            </div>`;
+                    }
+                });
+            }
+            
+            if (!html) html = '<div style="padding: 20px 12px; text-align: center; color: var(--text-muted); font-size: 13px;">No channels</div>';
+            sessionList.innerHTML = html;
+        } catch (e) {
+            sessionList.innerHTML = '<div style="padding: 20px 12px; text-align: center; color: var(--text-muted); font-size: 13px;">Load failed</div>';
+        }
+    }
+
+    async function selectImUser(channelId, channelName, userId, msgCount) {
+        currentImChannel = channelId;
+        currentImUserId = userId;
+        
+        // Update left sidebar selection state
+        loadImSidebar();
+        
+        // Update top title
+        document.getElementById('im-chat-title').innerHTML = `${channelName} <span style="font-size: 12px; color: var(--text-muted);">from ${userId}</span>`;
+        document.getElementById('im-chat-subtitle').textContent = `${msgCount} messages`;
+        document.getElementById('im-channel-label').textContent = channelName;
+        
+        // Load messages
+        await loadImMessages(channelId, userId);
+        
+        // Start polling
+        if (imPollingTimer) clearInterval(imPollingTimer);
+        imPollingTimer = setInterval(() => loadImMessages(channelId, userId), 5000);
+    }
+
+    async function loadImMessages(channelId, userId) {
+        const area = document.getElementById('im-message-area');
+        if (!area) return;
+        
+        try {
+            const resp = await fetch(`/api/channels/${channelId}/sessions`);
+            const data = await resp.json();
+            const sessions = data.sessions || [];
+            const session = sessions.find(s => s.user_id === userId);
+            
+            if (!session || !session.messages || session.messages.length === 0) {
+                area.innerHTML = `
+                    <div class="empty-state">
+                        <div class="es-icon">📭</div>
+                        <div class="es-title">No messages</div>
+                        <div class="es-desc">Send a message to start the conversation</div>
+                    </div>`;
+                return;
+            }
+            
+            // Check if update is needed (avoid flicker)
+            const msgHash = JSON.stringify(session.messages.map(m => m.content?.substring(0, 20)));
+            if (area.dataset.lastHash === msgHash) return;
+            area.dataset.lastHash = msgHash;
+            
+            let html = '';
+            session.messages.forEach(msg => {
+                const isUser = msg.role === 'user';
+                if (isUser) {
+                    html += `
+                        <div class="msg-row user">
+                            <div class="msg-avatar">🧑</div>
+                            <div class="msg-body">
+                                <div class="bubble">${escHtml(msg.content || '')}</div>
+                            </div>
+                        </div>`;
+                } else {
+                    html += `
+                        <div class="msg-row assistant">
+                            <div class="msg-avatar">🤖</div>
+                            <div class="msg-body">
+                                <div class="bubble">${renderMd(msg.content || '')}</div>
+                            </div>
+                        </div>`;
+                }
+            });
+            
+            area.innerHTML = html;
+            area.scrollTop = area.scrollHeight;
+        } catch (e) {
+            console.error('Failed to load IM messages:', e);
+        }
+    }
+
+    async function sendImMessage() {
+        const input = document.getElementById('im-message-input');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text) return;
+        
+        input.value = '';
+        
+        // Immediately display user message on the interface
+        const area = document.getElementById('im-message-area');
+        if (area) {
+            // Remove empty state
+            const emptyState = area.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+            
+            const row = document.createElement('div');
+            row.className = 'msg-row user';
+            row.innerHTML = `
+                <div class="msg-avatar">🧑</div>
+                <div class="msg-body">
+                    <div class="bubble">${escHtml(text)}</div>
+                </div>`;
+            area.appendChild(row);
+            
+            // Show loading state
+            const loadingRow = document.createElement('div');
+            loadingRow.className = 'msg-row assistant';
+            loadingRow.id = 'im-loading-row';
+            loadingRow.innerHTML = `
+                <div class="msg-avatar">🤖</div>
+                <div class="msg-body">
+                    <div class="bubble" style="color: var(--text-muted);">Thinking...</div>
+                </div>`;
+            area.appendChild(loadingRow);
+            area.scrollTop = area.scrollHeight;
+        }
+        
+        try {
+            // Send message via Gateway API
+            const userId = currentImUserId || 'webui';
+            const resp = await fetch('/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'default',
+                    messages: [{ role: 'user', content: text }],
+                    stream: false,
+                    user: `im_${userId}`,
+                }),
+            });
+            
+            const data = await resp.json();
+            const reply = data.choices?.[0]?.message?.content || 'No reply';
+            
+            // Remove loading state
+            const loadingEl = document.getElementById('im-loading-row');
+            if (loadingEl) loadingEl.remove();
+            
+            // Show AI reply
+            if (area) {
+                const replyRow = document.createElement('div');
+                replyRow.className = 'msg-row assistant';
+                replyRow.innerHTML = `
+                    <div class="msg-avatar">🤖</div>
+                    <div class="msg-body">
+                        <div class="bubble">${renderMd(reply)}</div>
+                    </div>`;
+                area.appendChild(replyRow);
+                area.scrollTop = area.scrollHeight;
+            }
+            
+            // Also send reply to user via DingTalk webhook
+            if (currentImChannel === 'dingtalk' && currentImUserId) {
+                try {
+                    await fetch('/api/dingtalk/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: reply }),
+                    });
+                } catch (e) {
+                    console.warn('Failed to relay to DingTalk:', e);
+                }
+            }
+        } catch (e) {
+            const loadingEl = document.getElementById('im-loading-row');
+            if (loadingEl) {
+                loadingEl.querySelector('.bubble').textContent = `Send failed: ${e.message}`;
+                loadingEl.querySelector('.bubble').style.color = 'var(--danger)';
+            }
+        }
+    }
+
+    async function refreshChannels() {
+        await loadImSidebar();
+    }
+
+    function openChannelModal() {
+        // Switch to channel tab
+        const channelBtn = document.querySelector('.tab-btn:nth-child(2)');
+        if (channelBtn) switchTab('channels', channelBtn);
+    }
+
+    // ── WeChat Personal Login ────────────────────────────────────────
+    let wechatPollingTimer = null;
+
+    async function startWeChatLogin() {
+        // Show QR code modal
+        let modal = document.getElementById('wechat-qr-modal');
+        if (!modal) {
+            // Create modal dynamically
+            modal = document.createElement('div');
+            modal.id = 'wechat-qr-modal';
+            modal.className = 'modal-overlay';
+            modal.onclick = function(e) { if (e.target === modal) closeWeChatModal(); };
+            modal.innerHTML = `
+                <div class="modal" style="width: 400px; text-align: center;">
+                    <div class="modal-header">
+                        <span class="modal-title">💚 WeChat Login</span>
+                        <button class="modal-close" onclick="closeWeChatModal()">×</button>
+                    </div>
+                    <div class="modal-body" style="padding: 30px;">
+                        <div id="wechat-qr-content">
+                            <div style="color: var(--text-muted); font-size: 14px;">Loading QR code...</div>
+                        </div>
+                        <div id="wechat-qr-status" style="margin-top: 16px; font-size: 13px; color: var(--text-muted);"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        modal.style.display = 'flex';
+
+        // Request QR code from backend
+        const contentEl = document.getElementById('wechat-qr-content');
+        const statusEl = document.getElementById('wechat-qr-status');
+
+        try {
+            const resp = await fetch('/api/channels/wechat_personal/login', { method: 'POST' });
+            const data = await resp.json();
+
+            if (data.status === 'already_logged_in') {
+                contentEl.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+                    <div style="font-size: 16px; font-weight: 600;">Already connected</div>
+                    <div style="color: var(--text-muted); margin-top: 8px;">Logged in as: ${data.nickname || 'Unknown'}</div>
+                    <button onclick="wechatLogout()" style="margin-top: 16px; padding: 8px 20px; border-radius: 8px; border: 1px solid var(--danger); color: var(--danger); background: transparent; cursor: pointer;">Disconnect</button>
+                `;
+                statusEl.textContent = '';
+                return;
+            }
+
+            if (data.status === 'qrcode_ready' && data.qrcode) {
+                contentEl.innerHTML = `<img src="${data.qrcode}" style="width: 260px; height: 260px; border-radius: 8px;" />`;
+                statusEl.textContent = 'Scan with WeChat to connect';
+                startWeChatPolling();
+            } else if (data.error) {
+                contentEl.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+                    <div style="font-size: 14px; color: var(--danger); margin-bottom: 16px;">${data.error}</div>
+                    <button onclick="startWeChatLogin()" style="padding: 8px 20px; border-radius: 8px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer;">Retry</button>
+                `;
+                statusEl.textContent = '';
+            } else {
+                contentEl.innerHTML = `
+                    <div style="color: var(--text-muted);">Waiting for QR code...</div>
+                    <button onclick="startWeChatLogin()" style="margin-top: 16px; padding: 8px 20px; border-radius: 8px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer;">Retry</button>
+                `;
+                statusEl.textContent = '';
+            }
+        } catch (e) {
+            contentEl.innerHTML = `
+                <div style="font-size: 48px; margin-bottom: 12px;">❌</div>
+                <div style="font-size: 14px; color: var(--danger); margin-bottom: 8px;">${e.message}</div>
+                <button onclick="startWeChatLogin()" style="margin-top: 12px; padding: 8px 20px; border-radius: 8px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer;">Retry</button>
+            `;
+            statusEl.textContent = 'Make sure itchat-uos is installed: pip install itchat-uos';
+        }
+    }
+
+    let wechatCurrentQr = null;  // 跟踪当前 QR 码
+
+    function startWeChatPolling() {
+        if (wechatPollingTimer) clearInterval(wechatPollingTimer);
+        wechatPollingTimer = setInterval(async () => {
+            try {
+                const resp = await fetch('/api/channels/wechat_personal/status');
+                const data = await resp.json();
+                if (data.logged_in) {
+                    clearInterval(wechatPollingTimer);
+                    wechatPollingTimer = null;
+                    wechatCurrentQr = null;
+                    const contentEl = document.getElementById('wechat-qr-content');
+                    const statusEl = document.getElementById('wechat-qr-status');
+                    if (contentEl) {
+                        contentEl.innerHTML = `
+                            <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+                            <div style="font-size: 16px; font-weight: 600;">Connected!</div>
+                            <div style="color: var(--text-muted); margin-top: 8px;">Logged in as: ${data.nickname || 'Unknown'}</div>
+                        `;
+                    }
+                    if (statusEl) statusEl.textContent = 'WeChat messages will now be forwarded to PyClaw';
+                    // Refresh sidebar
+                    await loadImSidebar();
+                } else if (data.qrcode && data.qrcode !== wechatCurrentQr) {
+                    // QR 码变化了（itchat 重新生成），刷新显示
+                    wechatCurrentQr = data.qrcode;
+                    const contentEl = document.getElementById('wechat-qr-content');
+                    const statusEl = document.getElementById('wechat-qr-status');
+                    if (contentEl) {
+                        contentEl.innerHTML = `<img src="${data.qrcode}" style="width: 260px; height: 260px; border-radius: 8px;" />`;
+                    }
+                    if (statusEl) statusEl.textContent = 'QR code refreshed — scan with WeChat';
+                } else if (!data.has_qrcode && !data.logged_in) {
+                    // 登录失败（超时或异常）
+                    clearInterval(wechatPollingTimer);
+                    wechatPollingTimer = null;
+                    const contentEl = document.getElementById('wechat-qr-content');
+                    const statusEl = document.getElementById('wechat-qr-status');
+                    if (contentEl) {
+                        contentEl.innerHTML = `
+                            <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+                            <div style="font-size: 14px; margin-bottom: 16px;">Login timed out or failed</div>
+                            <button onclick="startWeChatLogin()" style="padding: 8px 20px; border-radius: 8px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer;">Retry</button>
+                        `;
+                    }
+                    if (statusEl) statusEl.textContent = '';
+                }
+            } catch (e) {
+                // Ignore polling errors
+            }
+        }, 3000);
+    }
+
+    function closeWeChatModal() {
+        const modal = document.getElementById('wechat-qr-modal');
+        if (modal) modal.style.display = 'none';
+        if (wechatPollingTimer) {
+            clearInterval(wechatPollingTimer);
+            wechatPollingTimer = null;
+        }
+    }
+
+    async function wechatLogout() {
+        try {
+            await fetch('/api/channels/wechat_personal/logout', { method: 'POST' });
+            closeWeChatModal();
+            await loadImSidebar();
+        } catch (e) {
+            alert('Logout failed: ' + e.message);
+        }
+    }
+</script>
+</body>
+</html>

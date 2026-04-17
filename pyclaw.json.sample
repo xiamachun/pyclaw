@@ -1,0 +1,103 @@
+{
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "your-secret-token-here"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "llm": {
+    "default": "local",
+    "providers": {
+      "local": {
+        "type": "ollama",
+        "baseUrl": "http://localhost:11434/v1",
+        "models": [
+          { "id": "qwen3.5:9B", "maxTokens": 8192, "temperature": 0.7 },
+          { "id": "qwen3.5:27b", "maxTokens": 8192, "temperature": 0.7 }
+        ]
+      },
+      "dashscope": {
+        "type": "openai_compatible",
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "apiKey": "****",
+        "models": [
+          { "id": "qwen-plus-latest", "maxTokens": 4096, "temperature": 0.7 }
+        ]
+      },
+      "nvidia": {
+        "type": "openai_compatible",
+        "baseUrl": "https://integrate.api.nvidia.com/v1",
+        "apiKey": "****",
+        "models": [
+          { "id": "qwen/qwen3.5-122b-a10b", "maxTokens": 16384, "temperature": 0.6 },
+          { "id": "deepseek-ai/deepseek-v3.2", "maxTokens": 8192, "temperature": 1.0 },
+          { "id": "meta/llama-3.3-70b-instruct", "maxTokens": 8192, "temperature": 0.7 }
+        ]
+      }
+    }
+  },
+  "memory": {
+    "embedding": {
+      "provider": "openai",
+      "model": "qwen3-embedding:latest",
+      "baseUrl": "http://localhost:11434/v1"
+    },
+    "query": {
+      "maxResults": 6,
+      "minScore": 0.35,
+      "hybrid": {
+        "enabled": true,
+        "vectorWeight": 0.8,
+        "textWeight": 0.2,
+        "mmr": {
+          "enabled": true,
+          "lambda": 0.7
+        },
+        "temporalDecay": {
+          "enabled": true,
+          "halfLifeDays": 30
+        }
+      }
+    },
+    "chunking": {
+      "tokens": 400,
+      "overlap": 80
+    }
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "default",
+        "default": true,
+        "name": "Default Agent"
+      }
+    ]
+  },
+  "sessions": {
+    "db_path": "~/.pyclaw/sessions.db"
+  },
+  "channels": {
+    "dingtalk-connector": {
+      "enabled": false,
+      "clientId": "****",
+      "clientSecret": "****",
+      "gatewayToken": "your-secret-token-here",
+      "sessionTimeout": 1800000
+    },
+    "wechat-connector": {
+      "enabled": false
+    },
+    "feishu-connector": {
+      "enabled": false
+    }
+  }
+}

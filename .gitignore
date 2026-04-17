@@ -1,0 +1,49 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.env
+.env.local
+*.db
+*.sqlite
+.pyclaw/
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.log
+.DS_Store
+.idea/
+.vscode/
+node_modules/
+*.pptx
+python/script/env/
+pyclawwoker/
+
+# Ignore all .md except README.md
+*.md
+!README.md
+
+# IDE / tool generated
+.learnings/
+.qoder/
+tests/
+
+# Docs (generated articles)
+docs/
+
+# Config files (contain secrets, only commit .sample)
+pyclaw.json
+
+# Build / generated
+features.json
+Makefile
+pyproject.toml

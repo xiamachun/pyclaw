@@ -1,0 +1,130 @@
+{
+  "$schema": "PyClaw multi-agent configuration example",
+  "_comment": "Copy this file to ~/.pyclaw/pyclaw.json and customize",
+
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${PYCLAW_GATEWAY_TOKEN}"
+    }
+  },
+
+  "models": {
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "openai/gpt-4o",
+            "name": "GPT-4o",
+            "contextWindow": 128000,
+            "maxTokens": 16384
+          }
+        ]
+      },
+      "ollama": {
+        "baseUrl": "http://localhost:11434/v1",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "ollama/qwen3.5:27b",
+            "name": "Qwen 3.5 27B",
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  },
+
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/qwen3.5:27b"
+      }
+    },
+    "list": [
+      {
+        "id": "work-assistant",
+        "default": true,
+        "name": "工作助手",
+        "model": {
+          "primary": "openai/gpt-4o"
+        },
+        "systemPrompt": "你是一个专业的工作助手，擅长代码开发、技术文档撰写、项目管理和数据分析。回答要简洁专业，注重效率。",
+        "skills": null,
+        "maxTurns": 50,
+        "identity": {
+          "name": "小智",
+          "theme": "专业高效的工作伙伴，擅长编程、分析和项目管理",
+          "emoji": "💼"
+        }
+      },
+      {
+        "id": "life-assistant",
+        "default": false,
+        "name": "生活助手",
+        "model": {
+          "primary": "ollama/qwen3.5:27b"
+        },
+        "systemPrompt": "你是一个贴心的生活助手，擅长日程管理、健康建议、美食推荐、旅行规划和日常问答。回答要温暖友好，富有人情味。",
+        "skills": ["security"],
+        "maxTurns": 30,
+        "identity": {
+          "name": "小暖",
+          "theme": "温暖贴心的生活伙伴，关注健康、美食和生活品质",
+          "emoji": "🌸"
+        }
+      }
+    ]
+  },
+
+  "bindings": [
+    {
+      "type": "route",
+      "agentId": "work-assistant",
+      "match": {
+        "channel": "dingtalk"
+      },
+      "_comment": "钉钉消息默认路由到工作助手"
+    },
+    {
+      "type": "route",
+      "agentId": "life-assistant",
+      "match": {
+        "channel": "wechat"
+      },
+      "_comment": "微信消息默认路由到生活助手"
+    },
+    {
+      "type": "route",
+      "agentId": "work-assistant",
+      "match": {
+        "channel": "wechat",
+        "peerKind": "group"
+      },
+      "_comment": "微信群聊路由到工作助手（优先级高于上面的 channel-only 规则）"
+    },
+    {
+      "type": "route",
+      "agentId": "life-assistant",
+      "match": {
+        "channel": "dingtalk",
+        "peerId": "family-group-id"
+      },
+      "_comment": "钉钉中特定群聊路由到生活助手（peerId 优先级最高）"
+    }
+  ],
+
+  "security": {
+    "sandbox": {
+      "mode": "docker"
+    },
+    "credentialRedactionEnabled": true,
+    "allowedChannels": ["dingtalk", "wechat", "feishu"]
+  }
+}
