@@ -339,29 +339,18 @@ class WeChatPersonalClient:
                 }
                 redirect_url = core.loginInfo['url']
                 logger.info("process_login_info: redirect_uri: %s...", redirect_url[:80])
-                # Bypass corporate proxy (oneagent-filter) that intercepts wx.qq.com
-                no_proxy = {"http": None, "https": None, "no_proxy": "*"}
                 r = core.s.get(
                     redirect_url, headers=headers,
-                    allow_redirects=False, proxies=no_proxy,
-                    verify=False, timeout=30,
+                    allow_redirects=False, timeout=30,
                 )
-                # If 30x redirect, follow it manually without proxy
-                redirect_count = 0
-                while r.status_code in (301, 302, 307, 308) and redirect_count < 5:
-                    next_url = r.headers.get('Location', '')
-                    if not next_url:
-                        break
-                    redirect_count += 1
-                    logger.info("process_login_info: following redirect %d -> %s...",
-                                redirect_count, next_url[:80])
-                    r = core.s.get(
-                        next_url, headers=headers,
-                        allow_redirects=False, proxies=no_proxy,
-                        verify=False, timeout=30,
-                    )
-                logger.info("process_login_info: final status=%s, cookies=%s",
-                            r.status_code, list(core.s.cookies.get_dict().keys()))
+                logger.info(
+                    "process_login_info: status=%s, set-cookie=%s, "
+                    "session_cookies=%s, response_text=%s",
+                    r.status_code,
+                    r.headers.get('Set-Cookie', '(none)')[:200],
+                    list(core.s.cookies.get_dict().keys()),
+                    r.text[:300] if r.text else '(empty)',
+                )
                 core.loginInfo['url'] = core.loginInfo['url'][:core.loginInfo['url'].rfind('/')]
 
                 for indexUrl, detailedUrl in (
