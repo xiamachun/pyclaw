@@ -318,96 +318,32 @@ class WeChatPersonalClient:
             _core.check_login = _types.MethodType(_patched_check_login, _core)
             logger.info("check_login patched (module + bound method on core)")
 
-            # ── monkey-patch process_login_info 修复 wxsid cookies 缺失 ───
-            # itchat-uos 的 UOS patch 用 cookies 取代了 XML 解析，
-            # 但某些情况下服务端不会设置 cookies，导致 KeyError: 'wxsid'。
-            # 修复方案：cookies 失败时回退到 XML 解析。
+            # ── wrap process_login_info with logging + KeyError protection ───
+            # itchat-uos uses cookies for wxsid/wxuin (UOS patch).
+            # We keep the original implementation but add logging and
+            # catch KeyError if cookies are missing.
             _orig_process_login = _login_mod.process_login_info
 
             def _patched_process_login(core, loginContent):
-                import re as _re
-                import xml.dom.minidom
-                from itchat.utils import config as _config
-
-                regx = r'window.redirect_uri="(\S+)";'
-                core.loginInfo['url'] = _re.search(regx, loginContent).group(1)
-                headers = {
-                    'User-Agent': _config.USER_AGENT,
-                    'client-version': _config.UOS_PATCH_CLIENT_VERSION,
-                    'extspam': _config.UOS_PATCH_EXTSPAM,
-                    'referer': 'https://wx.qq.com/?&lang=zh_CN&target=t'
-                }
-                redirect_url = core.loginInfo['url']
-                logger.info("process_login_info: redirect_uri: %s...", redirect_url[:80])
-                r = core.s.get(
-                    redirect_url, headers=headers,
-                    allow_redirects=False, timeout=30,
-                )
-                logger.info(
-                    "process_login_info: status=%s, set-cookie=%s, "
-                    "session_cookies=%s, response_text=%s",
-                    r.status_code,
-                    r.headers.get('Set-Cookie', '(none)')[:200],
-                    list(core.s.cookies.get_dict().keys()),
-                    r.text[:300] if r.text else '(empty)',
-                )
-                core.loginInfo['url'] = core.loginInfo['url'][:core.loginInfo['url'].rfind('/')]
-
-                for indexUrl, detailedUrl in (
-                        ("wx2.qq.com", ("file.wx2.qq.com", "webpush.wx2.qq.com")),
-                        ("wx8.qq.com", ("file.wx8.qq.com", "webpush.wx8.qq.com")),
-                        ("qq.com", ("file.wx.qq.com", "webpush.wx.qq.com")),
-                        ("web2.wechat.com", ("file.web2.wechat.com", "webpush.web2.wechat.com")),
-                        ("wechat.com", ("file.web.wechat.com", "webpush.web.wechat.com"))):
-                    fileUrl, syncUrl = ['https://%s/cgi-bin/mmwebwx-bin' % url for url in detailedUrl]
-                    if indexUrl in core.loginInfo['url']:
-                        core.loginInfo['fileUrl'], core.loginInfo['syncUrl'] = fileUrl, syncUrl
-                        break
-                else:
-                    core.loginInfo['fileUrl'] = core.loginInfo['syncUrl'] = core.loginInfo['url']
-
-                import random
-                core.loginInfo['deviceid'] = 'e' + repr(random.random())[2:17]
-                core.loginInfo['logintime'] = int(time.time() * 1e3)
-                core.loginInfo['BaseRequest'] = {}
-
-                cookies = core.s.cookies.get_dict()
-                skey = ""
-                wxsid = cookies.get("wxsid", "")
-                wxuin = cookies.get("wxuin", "")
-                pass_ticket = cookies.get("pass_ticket", "")
-
-                # cookies 缺失时，回退到 XML 解析
-                if not wxsid or not wxuin:
-                    logger.info("cookies 缺少 wxsid/wxuin，尝试 XML 解析...")
-                    try:
-                        doc = xml.dom.minidom.parseString(r.text)
-                        for node in doc.documentElement.childNodes:
-                            if node.nodeName == 'skey' and node.childNodes:
-                                skey = node.childNodes[0].data
-                            elif node.nodeName == 'wxsid' and node.childNodes:
-                                wxsid = node.childNodes[0].data
-                            elif node.nodeName == 'wxuin' and node.childNodes:
-                                wxuin = node.childNodes[0].data
-                            elif node.nodeName == 'pass_ticket' and node.childNodes:
-                                pass_ticket = node.childNodes[0].data
-                        logger.info(f"XML 解析结果: skey={bool(skey)}, wxsid={bool(wxsid)}, wxuin={bool(wxuin)}, pass_ticket={bool(pass_ticket)}")
-                    except Exception as xml_err:
-                        logger.warning(f"XML 解析失败: {xml_err}, response_text={r.text[:200]}")
-
-                core.loginInfo['skey'] = core.loginInfo['BaseRequest']['Skey'] = skey
-                core.loginInfo['wxsid'] = core.loginInfo['BaseRequest']['Sid'] = wxsid
-                core.loginInfo['wxuin'] = core.loginInfo['BaseRequest']['Uin'] = wxuin
-                core.loginInfo['pass_ticket'] = pass_ticket
-                core.loginInfo['BaseRequest']['DeviceID'] = core.loginInfo['deviceid']
-
-                if not all([core.loginInfo.get(k) for k in ('wxsid', 'wxuin')]):
-                    logger.error(f"微信登录失败: wxsid/wxuin 缺失。该账号可能被限制网页微信登录。response: {r.text[:300]}")
+                try:
+                    result = _orig_process_login(core, loginContent)
+                    if result:
+                        logger.info("process_login_info succeeded (original itchat-uos)")
+                    else:
+                        logger.error(
+                            "process_login_info returned False. "
+                            "This WeChat account may be restricted from web login (error 1203)."
+                        )
+                    return result
+                except KeyError as exc:
+                    logger.error(
+                        "process_login_info KeyError: %s. "
+                        "cookies=%s. This account is likely restricted from web WeChat login.",
+                        exc, list(core.s.cookies.get_dict().keys()),
+                        exc_info=True,
+                    )
                     core.isLogging = False
                     return False
-
-                logger.info("微信 process_login_info 成功")
-                return True
 
             _login_mod.process_login_info = _patched_process_login
             logger.info("process_login_info 已 monkey-patch")

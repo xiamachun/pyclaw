@@ -146,7 +146,7 @@ class UnifiedLLMConfig(BaseModel):
 # Channels  (DingTalk, WeChat, Feishu - Extensible)
 # ---------------------------------------------------------------------------
 
-ALLOWED_CHANNELS = frozenset({"dingtalk", "wechat", "feishu"})
+ALLOWED_CHANNELS = frozenset({"dingtalk", "wechat", "wecom", "feishu"})
 
 
 class DingTalkConnectorConfig(BaseModel):
@@ -171,6 +171,20 @@ class WeChatConnectorConfig(BaseModel):
     token: str = Field(default="", description="消息校验 Token")
     encoding_aes_key: str = Field(default="", alias="encodingAesKey", description="消息加解密密钥")
 
+
+class WeComConnectorConfig(BaseModel):
+    """WeCom (Enterprise WeChat) channel configuration."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool = Field(default=False, description="Enable WeCom channel")
+    corp_id: str = Field(default="", alias="corpId", description="WeCom Corp ID")
+    agent_id: int = Field(default=0, alias="agentId", description="WeCom self-built app Agent ID")
+    secret: SecretStr = Field(default=SecretStr(""), description="WeCom app Secret")
+    token: str = Field(default="", description="Callback verification Token")
+    encoding_aes_key: str = Field(default="", alias="encodingAesKey", description="Callback message encryption key (43 chars)")
+    callback_port: int = Field(default=18790, alias="callbackPort", description="Local HTTP port for receiving callbacks")
+    gateway_token: Optional[str] = Field(default=None, alias="gatewayToken", description="Gateway auth token")
+    session_timeout: int = Field(default=1800000, alias="sessionTimeout", description="Session timeout in ms (default 30 min)")
 
 class FeishuConnectorConfig(BaseModel):
     """飞书通道配置 (预留)"""
@@ -207,6 +221,11 @@ class ChannelsConfig(BaseModel):
         default_factory=WeChatConnectorConfig,
         alias="wechat-connector",
         description="微信通道配置"
+    )
+    wecom_connector: WeComConnectorConfig = Field(
+        default_factory=WeComConnectorConfig,
+        alias="wecom-connector",
+        description="WeCom (Enterprise WeChat) channel"
     )
     feishu_connector: FeishuConnectorConfig = Field(
         default_factory=FeishuConnectorConfig,

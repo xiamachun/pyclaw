@@ -96,6 +96,17 @@
     "wechat-connector": {
       "enabled": false
     },
+    "wecom-connector": {
+      "enabled": false,
+      "corpId": "your-corp-id",
+      "agentId": 1000002,
+      "secret": "your-app-secret",
+      "token": "your-callback-token",
+      "encodingAesKey": "your-43-char-encoding-aes-key-here-abcdefghijk",
+      "callbackPort": 18790,
+      "gatewayToken": "your-secret-token-here",
+      "sessionTimeout": 1800000
+    },
     "feishu-connector": {
       "enabled": false
     }

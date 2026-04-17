@@ -26,11 +26,12 @@ mkdir -p "$STATE_DIR"
 # Channel registry (bash 3.x compatible — no associative arrays)
 # wechat_personal is excluded because it runs inside the Gateway process.
 # ---------------------------------------------------------------------------
-ALL_CHANNELS="dingtalk wechat feishu slack telegram"
+ALL_CHANNELS="dingtalk wecom wechat feishu slack telegram"
 
 channel_script() {
     case "$1" in
         dingtalk)  echo "pyclaw/channels/dingtalk/stream_client.py" ;;
+        wecom)     echo "pyclaw/channels/wecom/client.py" ;;
         wechat)    echo "pyclaw/channels/wechat/client.py" ;;
         feishu)    echo "pyclaw/channels/feishu/client.py" ;;
         slack)     echo "pyclaw/channels/slack/client.py" ;;
@@ -42,6 +43,7 @@ channel_script() {
 channel_config_key() {
     case "$1" in
         dingtalk)  echo "dingtalk-connector" ;;
+        wecom)     echo "wecom-connector" ;;
         wechat)    echo "wechat-connector" ;;
         feishu)    echo "feishu-connector" ;;
         slack)     echo "slack-connector" ;;
