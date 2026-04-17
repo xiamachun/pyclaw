@@ -255,28 +255,38 @@ class WeChatPersonalClient:
             # ── monkey-patch check_login 增加诊断日志 ─────────────
             # itchat binds module-level functions to core via load_login():
             #   core.check_login = login.check_login
-            # Python auto-binds them as methods, so self.check_login()
-            # passes self automatically. We patch the module function
-            # then re-bind via load_login() to keep the binding correct.
+            # Direct assignment to instance does NOT auto-bind self, so we
+            # must use types.MethodType to create a proper bound method.
+            import types as _types
             from itchat.components import login as _login_mod
-            _core = getattr(itchat, 'instance', itchat)
+            # itchat.instance is None; the real Core lives in instanceList[0]
+            # or can be found via itchat.check_login.__self__
+            _core = (
+                itchat.instanceList[0]
+                if hasattr(itchat, 'instanceList') and itchat.instanceList
+                else itchat.check_login.__self__
+            )
             _orig_check_login_fn = _login_mod.check_login
 
             def _patched_check_login(core_self, uuid=None):
+                import time as _time
+                t0 = _time.monotonic()
                 try:
                     status = _orig_check_login_fn(core_self, uuid)
                 except Exception as exc:
-                    logger.warning("check_login error: %s", exc)
+                    elapsed = _time.monotonic() - t0
+                    logger.warning("check_login error (%.1fs): %s", elapsed, exc)
                     return '400'
-                # Only log non-201 to avoid flooding (201 = waiting for confirm)
-                if status != '201':
-                    logger.info("check_login -> status=%s", status)
+                elapsed = _time.monotonic() - t0
+                # Always log with timing to diagnose fast-return issues
+                logger.info("check_login -> status=%s (%.1fs)", status, elapsed)
                 return status
 
-            # Patch module-level function, then re-bind to core instance
+            # Patch module-level function
             _login_mod.check_login = _patched_check_login
-            _core.check_login = _patched_check_login
-            logger.info("check_login patched (module + core instance)")
+            # Bind to core instance as a proper method (so self is passed)
+            _core.check_login = _types.MethodType(_patched_check_login, _core)
+            logger.info("check_login patched (module + bound method on core)")
 
             # ── monkey-patch process_login_info 修复 wxsid cookies 缺失 ───
             # itchat-uos 的 UOS patch 用 cookies 取代了 XML 解析，
