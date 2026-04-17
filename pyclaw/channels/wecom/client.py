@@ -263,10 +263,21 @@ class WeComClient:
         nonce = request.query.get("nonce", "")
         echostr = request.query.get("echostr", "")
 
-        logger.info("WeCom URL verification request received")
+        logger.info(
+            "WeCom URL verification request: msg_signature=%s, timestamp=%s, "
+            "nonce=%s, echostr=%s",
+            msg_signature, timestamp, nonce, echostr[:30] if echostr else "",
+        )
+
+        if not msg_signature or not echostr:
+            logger.warning("WeCom URL verification: missing required params")
+            return web.Response(status=403, text="Missing required parameters")
 
         if not self._crypto.verify_signature(msg_signature, timestamp, nonce, echostr):
-            logger.warning("WeCom URL verification failed: signature mismatch")
+            logger.warning(
+                "WeCom URL verification failed: signature mismatch. "
+                "Check that token and encodingAesKey match your WeCom app config."
+            )
             return web.Response(status=403, text="Signature verification failed")
 
         try:
@@ -323,13 +334,18 @@ class WeComClient:
 
         self._http_client = httpx.AsyncClient(timeout=30.0, verify=False)
 
-        # Pre-fetch access token to validate credentials
+        # Try to pre-fetch access token, but don't fail if network is blocked
+        # (e.g. corporate proxy blocking qyapi.weixin.qq.com)
         try:
             token = await self._token_manager.get_token(self._http_client)
             logger.info("WeCom credentials validated, access_token obtained")
         except Exception as exc:
-            logger.error("WeCom credential validation failed: %s", exc, exc_info=True)
-            raise
+            logger.warning(
+                "Could not pre-fetch WeCom access_token: %s. "
+                "Callback server will still start. "
+                "Token will be fetched when first message arrives.",
+                exc,
+            )
 
         # Set up aiohttp callback server
         app = web.Application()
