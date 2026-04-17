@@ -268,19 +268,49 @@ class WeChatPersonalClient:
             )
             _orig_check_login_fn = _login_mod.check_login
 
+            # Track whether QR has been scanned to adjust tip parameter
+            _scanned = [False]
+
             def _patched_check_login(core_self, uuid=None):
+                import re as _re
                 import time as _time
+                from itchat.utils import config as _config
+
+                uuid = uuid or core_self.uuid
+                url = '%s/cgi-bin/mmwebwx-bin/login' % _config.BASE_URL
+                local_time = int(_time.time())
+                # tip=1 for first check (long poll), tip=0 after scan (long poll for confirm)
+                tip = 0 if _scanned[0] else 1
+                params = 'loginicon=true&uuid=%s&tip=%s&r=%s&_=%s' % (
+                    uuid, tip, int(-local_time / 1579), local_time)
+                headers = {'User-Agent': _config.USER_AGENT}
+
                 t0 = _time.monotonic()
                 try:
-                    status = _orig_check_login_fn(core_self, uuid)
+                    response = core_self.s.get(url, params=params, headers=headers,
+                                               timeout=35)
                 except Exception as exc:
                     elapsed = _time.monotonic() - t0
-                    logger.warning("check_login error (%.1fs): %s", elapsed, exc)
-                    return '400'
+                    logger.warning("check_login request error (%.1fs): %s", elapsed, exc)
+                    return '408'
+
                 elapsed = _time.monotonic() - t0
-                # Always log with timing to diagnose fast-return issues
-                logger.info("check_login -> status=%s (%.1fs)", status, elapsed)
-                return status
+                data = _re.search(r'window.code=(\d+)', response.text)
+                if data and data.group(1) == '200':
+                    _scanned[0] = False
+                    logger.info("check_login -> status=200 (%.1fs) LOGIN SUCCESS", elapsed)
+                    if _login_mod.process_login_info(core_self, response.text):
+                        return '200'
+                    return '400'
+                elif data:
+                    code = data.group(1)
+                    if code == '201':
+                        _scanned[0] = True
+                    logger.info("check_login -> status=%s (%.1fs)", code, elapsed)
+                    return code
+                else:
+                    logger.warning("check_login -> no code in response (%.1fs)", elapsed)
+                    return '400'
 
             # Patch module-level function
             _login_mod.check_login = _patched_check_login
@@ -307,9 +337,31 @@ class WeChatPersonalClient:
                     'extspam': _config.UOS_PATCH_EXTSPAM,
                     'referer': 'https://wx.qq.com/?&lang=zh_CN&target=t'
                 }
-                logger.info(f"process_login_info: 访问 redirect_uri: {core.loginInfo['url'][:80]}...")
-                r = core.s.get(core.loginInfo['url'], headers=headers, allow_redirects=False)
-                logger.info(f"process_login_info: 响应 status={r.status_code}, cookies={list(core.s.cookies.get_dict().keys())}")
+                redirect_url = core.loginInfo['url']
+                logger.info("process_login_info: redirect_uri: %s...", redirect_url[:80])
+                # Bypass corporate proxy (oneagent-filter) that intercepts wx.qq.com
+                no_proxy = {"http": None, "https": None, "no_proxy": "*"}
+                r = core.s.get(
+                    redirect_url, headers=headers,
+                    allow_redirects=False, proxies=no_proxy,
+                    verify=False, timeout=30,
+                )
+                # If 30x redirect, follow it manually without proxy
+                redirect_count = 0
+                while r.status_code in (301, 302, 307, 308) and redirect_count < 5:
+                    next_url = r.headers.get('Location', '')
+                    if not next_url:
+                        break
+                    redirect_count += 1
+                    logger.info("process_login_info: following redirect %d -> %s...",
+                                redirect_count, next_url[:80])
+                    r = core.s.get(
+                        next_url, headers=headers,
+                        allow_redirects=False, proxies=no_proxy,
+                        verify=False, timeout=30,
+                    )
+                logger.info("process_login_info: final status=%s, cookies=%s",
+                            r.status_code, list(core.s.cookies.get_dict().keys()))
                 core.loginInfo['url'] = core.loginInfo['url'][:core.loginInfo['url'].rfind('/')]
 
                 for indexUrl, detailedUrl in (
