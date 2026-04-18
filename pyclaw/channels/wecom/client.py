@@ -17,6 +17,10 @@ Usage:
 import asyncio
 import json
 import logging
+import re
+import shutil
+import signal
+import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -49,6 +53,133 @@ TOKEN_REFRESH_BUFFER_SECONDS = 300
 
 # Session timeout default (30 minutes)
 DEFAULT_SESSION_TIMEOUT_MS = 1800000
+
+# Cloudflared URL detection timeout
+TUNNEL_STARTUP_TIMEOUT_SECONDS = 30
+
+# Regex to extract public URL from cloudflared output
+_CLOUDFLARED_URL_PATTERN = re.compile(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com")
+
+
+class CloudflaredTunnel:
+    """Manages a cloudflared Quick Tunnel subprocess.
+
+    Automatically starts cloudflared to expose a local port via a public
+    HTTPS URL. The public URL is parsed from cloudflared's stderr output.
+
+    Args:
+        local_port: Local port to tunnel.
+    """
+
+    def __init__(self, local_port: int):
+        self._local_port = local_port
+        self._process: Optional[subprocess.Popen] = None
+        self._public_url: Optional[str] = None
+
+    @property
+    def public_url(self) -> Optional[str]:
+        """Return the detected public URL, or None if not yet available."""
+        return self._public_url
+
+    async def start(self) -> str:
+        """Start cloudflared and wait for the public URL.
+
+        Returns:
+            The public HTTPS URL assigned by Cloudflare.
+
+        Raises:
+            RuntimeError: If cloudflared is not installed or URL detection
+                times out.
+        """
+        cloudflared_bin = shutil.which("cloudflared")
+        if not cloudflared_bin:
+            raise RuntimeError(
+                "cloudflared is not installed. "
+                "Install it with: brew install cloudflared (macOS) or "
+                "see https://developers.cloudflare.com/cloudflare-one/"
+                "connections/connect-networks/downloads/"
+            )
+
+        logger.info(
+            "Starting cloudflared tunnel for localhost:%d ...",
+            self._local_port,
+        )
+
+        self._process = subprocess.Popen(
+            [cloudflared_bin, "tunnel", "--url",
+             "http://localhost:%d" % self._local_port],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        url = await self._wait_for_url()
+        self._public_url = url
+        logger.info("Cloudflared tunnel established: %s", url)
+        return url
+
+    async def _wait_for_url(self) -> str:
+        """Read cloudflared stderr until the public URL appears.
+
+        Returns:
+            Detected public URL.
+
+        Raises:
+            RuntimeError: If URL is not detected within timeout or process
+                exits unexpectedly.
+        """
+        loop = asyncio.get_event_loop()
+        deadline = time.time() + TUNNEL_STARTUP_TIMEOUT_SECONDS
+        collected_output: list[str] = []
+
+        while time.time() < deadline:
+            if self._process is None or self._process.poll() is not None:
+                exit_code = (
+                    self._process.returncode if self._process else -1
+                )
+                raise RuntimeError(
+                    "cloudflared exited unexpectedly (code %d). Output: %s"
+                    % (exit_code, "".join(collected_output))
+                )
+
+            line = await loop.run_in_executor(
+                None, self._read_stderr_line
+            )
+            if line:
+                collected_output.append(line)
+                logger.debug("cloudflared: %s", line.rstrip())
+                match = _CLOUDFLARED_URL_PATTERN.search(line)
+                if match:
+                    return match.group(0)
+
+            await asyncio.sleep(0.1)
+
+        raise RuntimeError(
+            "Timed out waiting for cloudflared URL (%ds). Output: %s"
+            % (TUNNEL_STARTUP_TIMEOUT_SECONDS, "".join(collected_output))
+        )
+
+    def _read_stderr_line(self) -> str:
+        """Read one line from cloudflared stderr (blocking).
+
+        Returns:
+            Decoded line string, or empty string if nothing available.
+        """
+        if self._process and self._process.stderr:
+            line = self._process.stderr.readline()
+            if line:
+                return line.decode("utf-8", errors="replace")
+        return ""
+
+    def stop(self) -> None:
+        """Stop the cloudflared subprocess."""
+        if self._process and self._process.poll() is None:
+            logger.info("Stopping cloudflared tunnel...")
+            self._process.send_signal(signal.SIGTERM)
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+            logger.info("Cloudflared tunnel stopped")
 
 
 class WeComTokenManager:
@@ -117,6 +248,10 @@ class WeComClient:
         gateway_url: PyClaw Gateway URL.
         gateway_token: Gateway authentication token.
         session_timeout_ms: Session timeout in milliseconds.
+        callback_url: Fixed public callback URL. If set, automatic tunnel
+            is skipped.
+        tunnel_enabled: Whether to auto-start a cloudflared tunnel when
+            no callback_url is provided.
     """
 
     def __init__(
@@ -130,6 +265,9 @@ class WeComClient:
         gateway_url: str = DEFAULT_GATEWAY_URL,
         gateway_token: Optional[str] = None,
         session_timeout_ms: int = DEFAULT_SESSION_TIMEOUT_MS,
+        callback_url: Optional[str] = None,
+        tunnel_enabled: bool = True,
+        request_timeout_seconds: int = 960,
     ):
         self.corp_id = corp_id
         self.agent_id = agent_id
@@ -137,10 +275,15 @@ class WeComClient:
         self.gateway_url = gateway_url
         self.gateway_token = gateway_token or ""
         self.session_timeout_ms = session_timeout_ms
+        self.callback_url = callback_url
+        self.tunnel_enabled = tunnel_enabled
+        self.request_timeout_seconds = request_timeout_seconds
 
+        self._encoding_aes_key = encoding_aes_key
         self._crypto = WeComCrypto(token, encoding_aes_key, corp_id)
         self._token_manager = WeComTokenManager(corp_id, secret)
         self._http_client: Optional[httpx.AsyncClient] = None
+        self._tunnel: Optional[CloudflaredTunnel] = None
         self._sessions: dict[str, list] = {}
         self._state_dir = Path.home() / ".pyclaw"
         self._sessions_file = self._state_dir / "wecom_sessions.json"
@@ -328,16 +471,73 @@ class WeComClient:
             logger.error("Error handling WeCom callback: %s", exc, exc_info=True)
             return web.Response(status=200, text="success")
 
+    async def _auto_update_callback_url(self, public_url: str) -> bool:
+        """Update the WeCom app callback URL via API.
+
+        Uses the WeCom set_callback API to register the new public URL
+        so the user does not need to manually update it in the admin console.
+
+        Args:
+            public_url: The public HTTPS URL for the callback endpoint.
+
+        Returns:
+            True if the callback URL was updated successfully.
+        """
+        if not self._http_client:
+            return False
+
+        callback_url = public_url + "/wecom/callback"
+
+        try:
+            access_token = await self._token_manager.get_token(
+                self._http_client
+            )
+            url = "%s/callback/update?access_token=%s" % (
+                WECOM_API_BASE, access_token,
+            )
+            payload = {
+                "token": self._crypto.token,
+                "encodingaeskey": self._encoding_aes_key,
+                "url": callback_url,
+            }
+            response = await self._http_client.post(url, json=payload)
+            result = response.json()
+
+            if result.get("errcode", 0) != 0:
+                logger.warning(
+                    "Could not auto-update callback URL via API: "
+                    "errcode=%s, errmsg=%s. "
+                    "You may need to update it manually in the WeCom admin "
+                    "console to: %s",
+                    result.get("errcode"),
+                    result.get("errmsg"),
+                    callback_url,
+                )
+                return False
+
+            logger.info(
+                "WeCom callback URL auto-updated to: %s", callback_url
+            )
+            return True
+        except Exception as exc:
+            logger.warning(
+                "Failed to auto-update callback URL: %s. "
+                "Please update it manually in the WeCom admin console to: %s",
+                exc, callback_url,
+            )
+            return False
+
     async def start(self) -> None:
-        """Start the WeCom client (HTTP callback server + token refresh)."""
+        """Start the WeCom client (HTTP callback server + tunnel)."""
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
-        self._http_client = httpx.AsyncClient(timeout=30.0, verify=False)
+        self._http_client = httpx.AsyncClient(
+            timeout=self.request_timeout_seconds, verify=False
+        )
 
-        # Try to pre-fetch access token, but don't fail if network is blocked
-        # (e.g. corporate proxy blocking qyapi.weixin.qq.com)
+        # Try to pre-fetch access token
         try:
-            token = await self._token_manager.get_token(self._http_client)
+            await self._token_manager.get_token(self._http_client)
             logger.info("WeCom credentials validated, access_token obtained")
         except Exception as exc:
             logger.warning(
@@ -351,8 +551,6 @@ class WeComClient:
         app = web.Application()
         app.router.add_get("/wecom/callback", self._handle_callback_get)
         app.router.add_post("/wecom/callback", self._handle_callback_post)
-
-        # Health check endpoint
         app.router.add_get("/health", self._handle_health)
 
         runner = web.AppRunner(app)
@@ -361,15 +559,48 @@ class WeComClient:
         await site.start()
 
         logger.info(
-            "WeCom callback server started on port %d. "
-            "Configure your WeCom app callback URL to: "
-            "https://<your-public-domain>/wecom/callback",
-            self.callback_port,
+            "WeCom callback server started on port %d", self.callback_port
         )
-        logger.info(
-            "Tip: Use 'ngrok http %d' to expose this port publicly",
-            self.callback_port,
-        )
+
+        # Determine public URL
+        public_url = self.callback_url
+        if not public_url and self.tunnel_enabled:
+            # Auto-start cloudflared tunnel
+            self._tunnel = CloudflaredTunnel(self.callback_port)
+            try:
+                public_url = await self._tunnel.start()
+            except RuntimeError as exc:
+                self._tunnel = None
+                logger.warning("=" * 60)
+                logger.warning("CLOUDFLARED TUNNEL UNAVAILABLE")
+                logger.warning("=" * 60)
+                logger.warning("%s", exc)
+                logger.warning(
+                    "The WeCom callback server is running locally on "
+                    "port %d, but it is NOT reachable from the internet.",
+                    self.callback_port,
+                )
+                logger.warning(
+                    "To fix this, either:\n"
+                    "  1. Install cloudflared: "
+                    "brew install cloudflared (macOS)\n"
+                    "  2. Or set a fixed public URL in pyclaw.json: "
+                    '"callbackUrl": "https://your-domain.com"'
+                )
+                logger.warning("=" * 60)
+
+        if public_url:
+            logger.info(
+                "Public callback URL: %s/wecom/callback", public_url
+            )
+            # Try to auto-update the callback URL in WeCom
+            await self._auto_update_callback_url(public_url)
+        else:
+            logger.warning(
+                "No public URL available. WeCom will not be able to "
+                "send messages to this server until a public URL is "
+                "configured. The server will keep running and waiting."
+            )
 
         # Keep running
         try:
@@ -378,6 +609,8 @@ class WeComClient:
         except asyncio.CancelledError:
             pass
         finally:
+            if self._tunnel:
+                self._tunnel.stop()
             await runner.cleanup()
             if self._http_client:
                 await self._http_client.aclose()
@@ -454,6 +687,9 @@ def load_config() -> dict[str, Any]:
         ),
         "gateway_token": gateway_token,
         "session_timeout_ms": wecom_config.get("sessionTimeout", DEFAULT_SESSION_TIMEOUT_MS),
+        "callback_url": wecom_config.get("callbackUrl"),
+        "tunnel_enabled": wecom_config.get("tunnelEnabled", True),
+        "request_timeout_seconds": wecom_config.get("requestTimeout", 960000) // 1000,
     }
 
 
@@ -481,6 +717,9 @@ def main() -> None:
         gateway_url=config["gateway_url"],
         gateway_token=config["gateway_token"],
         session_timeout_ms=config["session_timeout_ms"],
+        callback_url=config.get("callback_url"),
+        tunnel_enabled=config.get("tunnel_enabled", True),
+        request_timeout_seconds=config.get("request_timeout_seconds", 960),
     )
 
     try:

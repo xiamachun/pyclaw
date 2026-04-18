@@ -8,6 +8,7 @@
 # Usage:
 #   ./scripts/restart_client.sh                # restart all enabled channels
 #   ./scripts/restart_client.sh dingtalk       # restart only DingTalk
+#   ./scripts/restart_client.sh dingtalk wecom  # restart DingTalk and WeCom
 #   ./scripts/restart_client.sh --stop         # stop all channel clients
 #   ./scripts/restart_client.sh --status       # show running channels
 #   ./scripts/restart_client.sh --list         # list available channels
@@ -26,13 +27,12 @@ mkdir -p "$STATE_DIR"
 # Channel registry (bash 3.x compatible — no associative arrays)
 # wechat_personal is excluded because it runs inside the Gateway process.
 # ---------------------------------------------------------------------------
-ALL_CHANNELS="dingtalk wecom wechat feishu slack telegram"
+ALL_CHANNELS="dingtalk wecom feishu slack telegram"
 
 channel_script() {
     case "$1" in
         dingtalk)  echo "pyclaw/channels/dingtalk/stream_client.py" ;;
         wecom)     echo "pyclaw/channels/wecom/client.py" ;;
-        wechat)    echo "pyclaw/channels/wechat/client.py" ;;
         feishu)    echo "pyclaw/channels/feishu/client.py" ;;
         slack)     echo "pyclaw/channels/slack/client.py" ;;
         telegram)  echo "pyclaw/channels/telegram/client.py" ;;
@@ -44,7 +44,6 @@ channel_config_key() {
     case "$1" in
         dingtalk)  echo "dingtalk-connector" ;;
         wecom)     echo "wecom-connector" ;;
-        wechat)    echo "wechat-connector" ;;
         feishu)    echo "feishu-connector" ;;
         slack)     echo "slack-connector" ;;
         telegram)  echo "telegram-connector" ;;
@@ -218,7 +217,7 @@ Environment variables:
 Examples:
   $(basename "$0")                  # restart all enabled channels
   $(basename "$0") dingtalk         # restart only DingTalk
-  $(basename "$0") dingtalk wechat  # restart DingTalk and WeChat
+  $(basename "$0") dingtalk wecom  # restart DingTalk and WeCom
   $(basename "$0") --stop           # stop all channel clients
   $(basename "$0") --stop dingtalk  # stop only DingTalk
   $(basename "$0") --status         # show status of all channels

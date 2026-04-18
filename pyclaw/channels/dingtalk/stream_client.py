@@ -111,11 +111,13 @@ class PyClawChatbotHandler(CallbackHandler):
         gateway_url: str = DEFAULT_GATEWAY_URL,
         gateway_token: Optional[str] = None,
         max_concurrency: int = 5,
+        request_timeout_seconds: int = 960,
     ):
         super().__init__()
         self.gateway_url = gateway_url
         self.gateway_token = gateway_token
         self.max_concurrency = max_concurrency
+        self.request_timeout_seconds = request_timeout_seconds
         
         # Load session history from disk (survives restarts)
         self._sessions: dict[str, list] = self._load_sessions()
@@ -394,9 +396,7 @@ class PyClawChatbotHandler(CallbackHandler):
         }
         
         try:
-            # Align timeout with AGENT_TIMEOUT_SECONDS + buffer for network overhead
-            from pyclaw.constants import AGENT_TIMEOUT_SECONDS
-            async with httpx.AsyncClient(timeout=AGENT_TIMEOUT_SECONDS + 60) as client:
+            async with httpx.AsyncClient(timeout=self.request_timeout_seconds) as client:
                 response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 result = response.json()
@@ -443,6 +443,7 @@ def load_config() -> dict:
         "client_secret": dingtalk.get("clientSecret", ""),
         "gateway_url": f"http://{gateway.get('host', '127.0.0.1')}:{gateway.get('port', 18789)}",
         "gateway_token": dingtalk.get("gatewayToken") or gateway.get("auth", {}).get("token", ""),
+        "request_timeout_seconds": dingtalk.get("requestTimeout", 960000) // 1000,
     }
 
 
@@ -480,9 +481,11 @@ def main():
     credential = Credential(client_id, client_secret)
     
     # Create message handler
+    request_timeout_seconds = config.get("request_timeout_seconds", 960)
     handler = PyClawChatbotHandler(
         gateway_url=gateway_url,
         gateway_token=gateway_token,
+        request_timeout_seconds=request_timeout_seconds,
     )
     
     # Create Stream client

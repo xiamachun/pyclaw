@@ -91,7 +91,8 @@
       "clientId": "****",
       "clientSecret": "****",
       "gatewayToken": "your-secret-token-here",
-      "sessionTimeout": 1800000
+      "sessionTimeout": 1800000,
+      "requestTimeout": 960000
     },
     "wechat-connector": {
       "enabled": false
@@ -104,8 +105,11 @@
       "token": "your-callback-token",
       "encodingAesKey": "your-43-char-encoding-aes-key-here-abcdefghijk",
       "callbackPort": 18790,
+      "callbackUrl": "",
+      "tunnelEnabled": true,
       "gatewayToken": "your-secret-token-here",
-      "sessionTimeout": 1800000
+      "sessionTimeout": 1800000,
+      "requestTimeout": 960000
     },
     "feishu-connector": {
       "enabled": false

@@ -1,12 +1,16 @@
+<p align="center">
+  <img src="docs/logo.png" alt="PyClaw Logo" width="200">
+</p>
+
 # PyClaw
 
-**Local-first personal AI assistant** — a Python reimplementation of [OpenClaw](https://github.com/openclaw/openclaw).
+**Local-first personal AI assistant**.
 
 PyClaw runs on your own devices, connects to messaging channels you already use, executes tools (shell commands, file operations, browser automation), and maintains long-term memory — all locally.
 
 ## Features
 
-- **Multi-Channel Support** — DingTalk, WeChat Work, WeChat (personal), Feishu, Slack, Telegram, and WebSocket
+- **Multi-Channel Support** — DingTalk, WeCom (Enterprise WeChat), WeChat (personal), Feishu, Slack, Telegram, and WebSocket
 - **Skill System** — Markdown-based capability definitions (`SKILL.md`) for extensible workflows
 - **Three-Layer Memory** — Session history + workspace prompts + vector knowledge base (hybrid BM25 + embeddings)
 - **Tool Execution** — Shell commands, file read/write, web search, browser automation
@@ -40,11 +44,13 @@ pip install -e .
 cp pyclaw.json.sample pyclaw.json
 # Edit pyclaw.json — fill in your gateway token and model settings
 
-# 4. Start the gateway
-bash scripts/restart_pyclaw.sh
+# 4. Start everything (Gateway + Channel clients)
+bash scripts/start_all.sh
 ```
 
 Open `http://127.0.0.1:18789` in your browser to start chatting.
+
+> **Tip:** Use `bash scripts/start_all.sh --stop` to stop all components, or `bash scripts/start_all.sh --status` to check status.
 
 > ⚠️ **Security Notice:** PyClaw binds to `127.0.0.1` (localhost only) by design. **Do not** expose the Gateway to the public internet via reverse proxy or port forwarding. Many API endpoints skip authentication for local convenience. If you need remote access, use SSH tunneling or a VPN.
 
@@ -116,7 +122,7 @@ cp pyclaw.json.sample pyclaw.json
   },
   "channels": {
     "dingtalk-connector": { "enabled": false },
-    "wechat-connector": { "enabled": false },
+    "wecom-connector": { "enabled": false },
     "feishu-connector": { "enabled": false }
   },
   "agents": {
@@ -146,7 +152,7 @@ Most configuration lives in `pyclaw.json`. These environment variables are only 
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
 │  │   CLI    │  │  Web UI  │  │ Channels │  │  Cron/Hooks  │   │
 │  │ (click)  │  │(FastAPI) │  │(DingTalk │  │  (APScheduler│   │
-│  │          │  │          │  │ WeChat   │  │             )│   │
+│  │          │  │          │  │ WeCom    │  │             )│   │
 │  │          │  │          │  │ Feishu)  │  │              │   │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘   │
 │       └──────────────┴──────┬───────┴───────────────┘           │
@@ -202,25 +208,35 @@ Most configuration lives in `pyclaw.json`. These environment variables are only 
    }
    ```
 
-### WeChat Work (Enterprise)
+### WeCom (Enterprise WeChat)
 
-Configure in `pyclaw.json`:
-```json
-{
-  "channels": {
-    "wechat-connector": {
-      "enabled": true,
-      "corpId": "your-corp-id",
-      "agentId": "your-agent-id",
-      "secret": "your-secret",
-      "token": "your-token",
-      "encodingAesKey": "your-encoding-aes-key"
-    }
-  }
-}
-```
+1. Log in to [WeCom Admin Console](https://work.weixin.qq.com/) and create a self-built app
+2. Note down: **Corp ID**, **Agent ID**, **Secret**
+3. Under "API Receiving" in the app settings, set **Token** and **EncodingAESKey** (auto-generate recommended)
+4. Add your server's public IP to the app's **Trusted IP** list
+5. Configure in `pyclaw.json`:
+   ```json
+   {
+     "channels": {
+       "wecom-connector": {
+         "enabled": true,
+         "corpId": "your-corp-id",
+         "agentId": 1000002,
+         "secret": "your-app-secret",
+         "token": "your-callback-token",
+         "encodingAesKey": "your-43-char-key",
+         "callbackPort": 18790,
+         "tunnelEnabled": true
+       }
+     }
+   }
+   ```
+6. Start the WeCom client: `bash scripts/restart_client.sh wecom`
+7. If `tunnelEnabled` is `true` and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) is installed, a public tunnel URL will be created automatically and the callback URL will be updated via API
+8. To use a fixed domain instead, set `"callbackUrl": "https://your-domain.com"` and `"tunnelEnabled": false`
+9. Enable the **WeChat Plugin** in WeCom Admin Console to chat with PyClaw directly from personal WeChat
 
-### WeChat (Personal)
+### WeChat (Personal) *(experimental)*
 
 Uses `itchat-uos` for personal WeChat login via QR code scanning:
 
@@ -293,7 +309,7 @@ pyclaw gateway --port 18789 --verbose
 pyclaw/
 ├── pyclaw/
 │   ├── agents/       # Agent runtime, model selection, tools
-│   ├── channels/     # DingTalk, WeChat Work, WeChat (personal), Feishu, Telegram, Slack
+│   ├── channels/     # DingTalk, WeCom, WeChat (personal), Feishu, Telegram, Slack
 │   │   └── gateway_client.py  # Shared route-resolve + Gateway call logic
 │   ├── cli/          # Click-based CLI commands
 │   ├── config/       # Pydantic config schema, loader, hot-reload watcher

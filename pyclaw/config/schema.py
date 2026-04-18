@@ -146,7 +146,7 @@ class UnifiedLLMConfig(BaseModel):
 # Channels  (DingTalk, WeChat, Feishu - Extensible)
 # ---------------------------------------------------------------------------
 
-ALLOWED_CHANNELS = frozenset({"dingtalk", "wechat", "wecom", "feishu"})
+ALLOWED_CHANNELS = frozenset({"dingtalk", "wecom", "wechat_personal", "feishu"})
 
 
 class DingTalkConnectorConfig(BaseModel):
@@ -183,8 +183,11 @@ class WeComConnectorConfig(BaseModel):
     token: str = Field(default="", description="Callback verification Token")
     encoding_aes_key: str = Field(default="", alias="encodingAesKey", description="Callback message encryption key (43 chars)")
     callback_port: int = Field(default=18790, alias="callbackPort", description="Local HTTP port for receiving callbacks")
+    callback_url: Optional[str] = Field(default=None, alias="callbackUrl", description="Fixed public callback URL. If set, auto-tunnel is skipped")
+    tunnel_enabled: bool = Field(default=True, alias="tunnelEnabled", description="Auto-start cloudflared tunnel when no callbackUrl is set")
     gateway_token: Optional[str] = Field(default=None, alias="gatewayToken", description="Gateway auth token")
     session_timeout: int = Field(default=1800000, alias="sessionTimeout", description="Session timeout in ms (default 30 min)")
+    request_timeout: int = Field(default=960000, alias="requestTimeout", description="HTTP request timeout in ms (default 960s = 16min)")
 
 class FeishuConnectorConfig(BaseModel):
     """飞书通道配置 (预留)"""
