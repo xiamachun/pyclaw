@@ -50,7 +50,16 @@ bash scripts/start_all.sh
 
 Open `http://127.0.0.1:18789` in your browser to start chatting.
 
-> **Tip:** Use `bash scripts/start_all.sh --stop` to stop all components, or `bash scripts/start_all.sh --status` to check status.
+> **Tip:** Management commands:
+> ```bash
+> bash scripts/start_all.sh                # start everything (idempotent)
+> bash scripts/start_all.sh --restart      # restart after code change (tunnel kept)
+> bash scripts/start_all.sh --stop         # stop gateway + channels (keep tunnel)
+> bash scripts/start_all.sh --stop-all     # stop everything including tunnel
+> bash scripts/start_all.sh --restart-tunnel  # force new tunnel URL
+> bash scripts/start_all.sh --status       # check what's running
+> bash scripts/start_all.sh --help         # show all options
+> ```
 
 > ⚠️ **Security Notice:** PyClaw binds to `127.0.0.1` (localhost only) by design. **Do not** expose the Gateway to the public internet via reverse proxy or port forwarding. Many API endpoints skip authentication for local convenience. If you need remote access, use SSH tunneling or a VPN.
 

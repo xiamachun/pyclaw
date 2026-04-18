@@ -62,35 +62,179 @@ _CLOUDFLARED_URL_PATTERN = re.compile(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.c
 
 
 class CloudflaredTunnel:
-    """Manages a cloudflared Quick Tunnel subprocess.
+    """Manages a cloudflared Quick Tunnel as an independent long-lived process.
 
-    Automatically starts cloudflared to expose a local port via a public
-    HTTPS URL. The public URL is parsed from cloudflared's stderr output.
+    The tunnel process is decoupled from the WeComClient lifecycle:
+    - On start, checks if an existing tunnel is already running and reusable.
+    - If reusable (process alive + URL reachable), skips restart entirely.
+    - URL and PID are persisted to ~/.pyclaw/ so restarts of the wecom
+      client do NOT restart cloudflared (avoiding URL changes).
 
     Args:
         local_port: Local port to tunnel.
+        state_dir: Directory for persisting PID and URL files.
     """
 
-    def __init__(self, local_port: int):
+    def __init__(self, local_port: int, state_dir: Optional[Path] = None):
         self._local_port = local_port
         self._process: Optional[subprocess.Popen] = None
         self._public_url: Optional[str] = None
+        self._state_dir = state_dir or Path.home() / ".pyclaw"
+        self._pid_file = self._state_dir / "cloudflared.pid"
+        self._url_file = self._state_dir / "cloudflared_url.txt"
 
     @property
     def public_url(self) -> Optional[str]:
         """Return the detected public URL, or None if not yet available."""
         return self._public_url
 
-    async def start(self) -> str:
-        """Start cloudflared and wait for the public URL.
+    def _read_saved_state(self) -> tuple[Optional[int], Optional[str]]:
+        """Read saved PID and URL from state files.
+
+        Returns:
+            Tuple of (pid, url), either may be None if file is missing.
+        """
+        saved_pid: Optional[int] = None
+        saved_url: Optional[str] = None
+
+        if self._pid_file.exists():
+            try:
+                saved_pid = int(self._pid_file.read_text().strip())
+            except (ValueError, OSError):
+                pass
+
+        if self._url_file.exists():
+            try:
+                saved_url = self._url_file.read_text().strip()
+            except OSError:
+                pass
+
+        return saved_pid, saved_url
+
+    def _save_state(self, pid: int, url: str) -> None:
+        """Persist PID and URL to state files.
+
+        Args:
+            pid: Process ID of the cloudflared process.
+            url: Public HTTPS URL assigned by Cloudflare.
+        """
+        self._state_dir.mkdir(parents=True, exist_ok=True)
+        self._pid_file.write_text(str(pid))
+        self._url_file.write_text(url)
+
+    @staticmethod
+    def _is_process_alive(pid: int) -> bool:
+        """Check if a process with the given PID is still running.
+
+        Args:
+            pid: Process ID to check.
+
+        Returns:
+            True if the process is alive.
+        """
+        try:
+            import os
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+    @staticmethod
+    def _is_url_reachable(url: str) -> bool:
+        """Check if a cloudflared URL is still reachable via HTTP.
+
+        Args:
+            url: Public HTTPS URL to check.
+
+        Returns:
+            True if the URL responds (any status code).
+        """
+        try:
+            result = subprocess.run(
+                ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                 "--max-time", "5", url],
+                capture_output=True, text=True, timeout=10,
+            )
+            return result.returncode == 0 and result.stdout.strip() != "000"
+        except Exception:
+            return False
+
+    @staticmethod
+    def kill_all_processes() -> None:
+        """Kill all existing cloudflared tunnel processes.
+
+        Prevents accumulation of orphaned cloudflared processes.
+        """
+        try:
+            result = subprocess.run(
+                ["pkill", "-f", "cloudflared tunnel"],
+                capture_output=True, timeout=5,
+            )
+            if result.returncode == 0:
+                logger.info("Killed existing cloudflared processes")
+                time.sleep(1)
+        except Exception:
+            pass
+
+    async def try_reuse_existing(self) -> Optional[str]:
+        """Try to reuse an existing cloudflared tunnel.
+
+        Checks if a previously started tunnel is still alive and its URL
+        is reachable. If so, returns the URL without starting a new process.
+
+        Returns:
+            The reusable public URL, or None if no reusable tunnel found.
+        """
+        saved_pid, saved_url = self._read_saved_state()
+
+        if saved_pid and saved_url:
+            if self._is_process_alive(saved_pid):
+                logger.info(
+                    "Found existing cloudflared (PID %d), checking URL...",
+                    saved_pid,
+                )
+                if self._is_url_reachable(saved_url):
+                    self._public_url = saved_url
+                    logger.info(
+                        "Reusing existing cloudflared tunnel: %s (PID %d)",
+                        saved_url, saved_pid,
+                    )
+                    return saved_url
+                else:
+                    logger.warning(
+                        "Existing cloudflared (PID %d) URL is unreachable, "
+                        "will restart tunnel",
+                        saved_pid,
+                    )
+            else:
+                logger.info(
+                    "Saved cloudflared PID %d is no longer running",
+                    saved_pid,
+                )
+
+        return None
+
+    async def start(self, max_retries: int = 10) -> str:
+        """Start cloudflared, reusing an existing tunnel if possible.
+
+        First checks for a running tunnel that can be reused. If not,
+        kills any stale processes and starts a new one with retries.
+
+        Args:
+            max_retries: Maximum number of start attempts.
 
         Returns:
             The public HTTPS URL assigned by Cloudflare.
 
         Raises:
-            RuntimeError: If cloudflared is not installed or URL detection
-                times out.
+            RuntimeError: If cloudflared is not installed or all retries
+                are exhausted.
         """
+        # Try to reuse existing tunnel first
+        reused_url = await self.try_reuse_existing()
+        if reused_url:
+            return reused_url
+
         cloudflared_bin = shutil.which("cloudflared")
         if not cloudflared_bin:
             raise RuntimeError(
@@ -100,22 +244,53 @@ class CloudflaredTunnel:
                 "connections/connect-networks/downloads/"
             )
 
-        logger.info(
-            "Starting cloudflared tunnel for localhost:%d ...",
-            self._local_port,
-        )
+        # Kill any stale cloudflared processes before starting fresh
+        self.kill_all_processes()
 
-        self._process = subprocess.Popen(
-            [cloudflared_bin, "tunnel", "--url",
-             "http://localhost:%d" % self._local_port],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        last_error: Optional[Exception] = None
+        for attempt in range(1, max_retries + 1):
+            logger.info(
+                "Starting cloudflared tunnel for localhost:%d (attempt %d/%d) ...",
+                self._local_port, attempt, max_retries,
+            )
 
-        url = await self._wait_for_url()
-        self._public_url = url
-        logger.info("Cloudflared tunnel established: %s", url)
-        return url
+            self._process = subprocess.Popen(
+                [cloudflared_bin, "tunnel", "--url",
+                 "http://localhost:%d" % self._local_port],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            try:
+                url = await self._wait_for_url()
+                self._public_url = url
+                # Persist state so future restarts can reuse this tunnel
+                self._save_state(self._process.pid, url)
+                logger.info("Cloudflared tunnel established: %s", url)
+                return url
+            except RuntimeError as exc:
+                last_error = exc
+                logger.warning(
+                    "Cloudflared attempt %d/%d failed: %s",
+                    attempt, max_retries, exc,
+                )
+                # Clean up failed process
+                if self._process and self._process.poll() is None:
+                    self._process.kill()
+                    self._process.wait(timeout=3)
+                self._process = None
+
+                if attempt < max_retries:
+                    wait_seconds = min(attempt * 2, 10)
+                    logger.info(
+                        "Retrying in %d seconds...", wait_seconds
+                    )
+                    await asyncio.sleep(wait_seconds)
+
+        raise RuntimeError(
+            "cloudflared failed after %d attempts. Last error: %s"
+            % (max_retries, last_error)
+        )
 
     async def _wait_for_url(self) -> str:
         """Read cloudflared stderr until the public URL appears.
@@ -471,61 +646,31 @@ class WeComClient:
             logger.error("Error handling WeCom callback: %s", exc, exc_info=True)
             return web.Response(status=200, text="success")
 
-    async def _auto_update_callback_url(self, public_url: str) -> bool:
-        """Update the WeCom app callback URL via API.
+    def _print_callback_url_notice(
+        self, public_url: str, is_reused: bool
+    ) -> None:
+        """Print the callback URL, prominently if it changed.
 
-        Uses the WeCom set_callback API to register the new public URL
-        so the user does not need to manually update it in the admin console.
+        When the tunnel is reused (URL unchanged), prints a brief info line.
+        When the URL is new, prints a prominent banner so the user knows
+        to update the WeCom admin console.
 
         Args:
-            public_url: The public HTTPS URL for the callback endpoint.
-
-        Returns:
-            True if the callback URL was updated successfully.
+            public_url: The public HTTPS base URL.
+            is_reused: True if the URL was reused from an existing tunnel.
         """
-        if not self._http_client:
-            return False
-
         callback_url = public_url + "/wecom/callback"
-
-        try:
-            access_token = await self._token_manager.get_token(
-                self._http_client
-            )
-            url = "%s/callback/update?access_token=%s" % (
-                WECOM_API_BASE, access_token,
-            )
-            payload = {
-                "token": self._crypto.token,
-                "encodingaeskey": self._encoding_aes_key,
-                "url": callback_url,
-            }
-            response = await self._http_client.post(url, json=payload)
-            result = response.json()
-
-            if result.get("errcode", 0) != 0:
-                logger.warning(
-                    "Could not auto-update callback URL via API: "
-                    "errcode=%s, errmsg=%s. "
-                    "You may need to update it manually in the WeCom admin "
-                    "console to: %s",
-                    result.get("errcode"),
-                    result.get("errmsg"),
-                    callback_url,
-                )
-                return False
-
+        if is_reused:
+            logger.info("Callback URL (unchanged): %s", callback_url)
+        else:
+            logger.info("=" * 60)
+            logger.info("  NEW CALLBACK URL — update WeCom admin console!")
+            logger.info("  %s", callback_url)
+            logger.info("=" * 60)
             logger.info(
-                "WeCom callback URL auto-updated to: %s", callback_url
+                "Go to: WeCom Admin -> Apps -> Your App -> "
+                "API Receive -> set the URL above"
             )
-            return True
-        except Exception as exc:
-            logger.warning(
-                "Failed to auto-update callback URL: %s. "
-                "Please update it manually in the WeCom admin console to: %s",
-                exc, callback_url,
-            )
-            return False
 
     async def start(self) -> None:
         """Start the WeCom client (HTTP callback server + tunnel)."""
@@ -564,11 +709,20 @@ class WeComClient:
 
         # Determine public URL
         public_url = self.callback_url
+        tunnel_reused = False
         if not public_url and self.tunnel_enabled:
-            # Auto-start cloudflared tunnel
-            self._tunnel = CloudflaredTunnel(self.callback_port)
+            # Start or reuse cloudflared tunnel (independent process)
+            self._tunnel = CloudflaredTunnel(
+                self.callback_port, state_dir=self._state_dir
+            )
             try:
-                public_url = await self._tunnel.start()
+                # Check if we can reuse an existing tunnel
+                reused_url = await self._tunnel.try_reuse_existing()
+                if reused_url:
+                    public_url = reused_url
+                    tunnel_reused = True
+                else:
+                    public_url = await self._tunnel.start()
             except RuntimeError as exc:
                 self._tunnel = None
                 logger.warning("=" * 60)
@@ -590,11 +744,7 @@ class WeComClient:
                 logger.warning("=" * 60)
 
         if public_url:
-            logger.info(
-                "Public callback URL: %s/wecom/callback", public_url
-            )
-            # Try to auto-update the callback URL in WeCom
-            await self._auto_update_callback_url(public_url)
+            self._print_callback_url_notice(public_url, is_reused=tunnel_reused)
         else:
             logger.warning(
                 "No public URL available. WeCom will not be able to "
@@ -602,15 +752,13 @@ class WeComClient:
                 "configured. The server will keep running and waiting."
             )
 
-        # Keep running
+        # Keep running — tunnel is NOT stopped on exit (independent process)
         try:
             while True:
                 await asyncio.sleep(3600)
         except asyncio.CancelledError:
             pass
         finally:
-            if self._tunnel:
-                self._tunnel.stop()
             await runner.cleanup()
             if self._http_client:
                 await self._http_client.aclose()
