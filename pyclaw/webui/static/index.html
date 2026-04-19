@@ -2885,8 +2885,16 @@
             if (disconnected.length > 0) {
                 html += `<div class="session-group-label" style="margin-top: 12px;">Disconnected</div>`;
                 disconnected.forEach(ch => {
-                    if (ch.id === 'wechat_personal' && ch.status !== 'not_installed') {
-                        // WeChat: clickable to scan QR code
+                    if (ch.id === 'wechat_personal' && ch.status === 'disabled') {
+                        // WeChat disabled in config
+                        html += `
+                            <div class="session-item" style="opacity: 0.5;">
+                                <span class="si-icon">${ch.icon}</span>
+                                <span class="si-title">${ch.name}</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">Disabled</span>
+                            </div>`;
+                    } else if (ch.id === 'wechat_personal' && ch.status !== 'not_installed') {
+                        // WeChat enabled: clickable to scan QR code
                         html += `
                             <div class="session-item" style="cursor: pointer;" onclick="startWeChatLogin()">
                                 <span class="si-icon">${ch.icon}</span>

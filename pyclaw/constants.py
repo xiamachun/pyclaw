@@ -54,6 +54,7 @@ SKILL_SHELL_TIMEOUT = 120
 
 # ── Channels ───────────────────────────────────────────────────────────
 DINGTALK_CLIENT_TIMEOUT = 600
+WECHAT_PERSONAL_LOGIN_TIMEOUT_SECONDS = 60
 
 # ── Cron Scheduler ─────────────────────────────────────────────────────
 # Grace period for missed cron jobs (e.g. after macOS sleep/wake).

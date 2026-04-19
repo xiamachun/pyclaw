@@ -97,6 +97,9 @@
     "wechat-connector": {
       "enabled": false
     },
+    "wechat-personal": {
+      "enabled": false
+    },
     "wecom-connector": {
       "enabled": false,
       "corpId": "your-corp-id",

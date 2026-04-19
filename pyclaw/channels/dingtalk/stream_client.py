@@ -29,6 +29,7 @@ if str(_project_root) not in sys.path:
 
 import certifi
 
+from pyclaw.channels.message_formatter import format_for_dingtalk
 from pyclaw.constants import DEFAULT_GATEWAY_URL
 import httpx
 
@@ -302,8 +303,9 @@ class PyClawChatbotHandler(CallbackHandler):
             
             # Send reply
             if reply and dt_msg.session_webhook:
+                formatted_reply = format_for_dingtalk(reply)
                 logger.info("Reply to %s: %s...", dt_msg.sender_nick, reply[:50])
-                await self._reply_via_webhook(dt_msg.session_webhook, reply)
+                await self._reply_via_webhook(dt_msg.session_webhook, formatted_reply)
                 self._stats["processed"] += 1
             elif dt_msg.session_webhook:
                 await self._reply_via_webhook(dt_msg.session_webhook, "Sorry, I cannot reply at the moment")
@@ -332,8 +334,8 @@ class PyClawChatbotHandler(CallbackHandler):
             payload = {
                 "msgtype": "text",
                 "text": {
-                    "content": content
-                }
+                    "content": content,
+                },
             }
             
             async with httpx.AsyncClient(timeout=30.0) as client:

@@ -10,10 +10,10 @@ PyClaw runs on your own devices, connects to messaging channels you already use,
 
 ## Features
 
-- **Multi-Channel Support** — DingTalk, WeCom (Enterprise WeChat), WeChat (personal), Feishu, Slack, Telegram, and WebSocket
+- **Multi-Channel Support** — DingTalk, WeCom (Enterprise WeChat), WeChat (personal), Feishu — with Slack and Telegram planned
 - **Skill System** — Markdown-based capability definitions (`SKILL.md`) for extensible workflows
 - **Three-Layer Memory** — Session history + workspace prompts + vector knowledge base (hybrid BM25 + embeddings)
-- **Tool Execution** — Shell commands, file read/write, web search, browser automation
+- **Tool Execution** — Shell commands, file read/write, web search, memory management, cron scheduling
 - **Streaming Responses** — Real-time token streaming via WebSocket
 - **Multi-Provider LLM** — Local (Ollama), DashScope, NVIDIA, and any OpenAI-compatible API
 - **Task Scheduling** — Cron-based periodic tasks with APScheduler
@@ -132,9 +132,11 @@ cp pyclaw.json.sample pyclaw.json
   "channels": {
     "dingtalk-connector": { "enabled": false },
     "wecom-connector": { "enabled": false },
-    "feishu-connector": { "enabled": false }
+    "feishu-connector": { "enabled": false },
+    "wechat-personal": { "enabled": false }
   },
   "agents": {
+    "defaults": { "model": { "primary": "qwen3.5:9B" } },
     "list": [
       { "id": "default", "default": true, "name": "Default Agent" }
     ]
@@ -187,11 +189,12 @@ Most configuration lives in `pyclaw.json`. These environment variables are only 
 │                             │                                   │
 │       ┌──────────┬──────────┼──────────┬──────────┐            │
 │       │          │          │          │          │            │
-│  ┌────▼───┐ ┌───▼────┐ ┌──▼───┐ ┌───▼────┐ ┌──▼─────┐     │
-│  │ Memory │ │Process │ │Media │ │Browser │ │  TTS   │     │
-│  │(Vector │ │Sandbox │ │Pipe  │ │(Play-  │ │(Edge/  │     │
-│  │+BM25)  │ │(Docker)│ │line  │ │wright) │ │OpenAI) │     │
-│  └────────┘ └────────┘ └──────┘ └────────┘ └────────┘     │
+│  ┌────▼───┐                                                  │
+│  │ Memory │                                                  │
+│  │(Vector │                                                  │
+│  │+BM25)  │                                                  │
+│  └────────┘                                                  │
+│                                                                 │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │              Plugin & Skill System                        │  │
@@ -318,7 +321,7 @@ pyclaw gateway --port 18789 --verbose
 pyclaw/
 ├── pyclaw/
 │   ├── agents/       # Agent runtime, model selection, tools
-│   ├── channels/     # DingTalk, WeCom, WeChat (personal), Feishu, Telegram, Slack
+│   ├── channels/     # DingTalk, WeCom, WeChat (personal), Feishu
 │   │   └── gateway_client.py  # Shared route-resolve + Gateway call logic
 │   ├── cli/          # Click-based CLI commands
 │   ├── config/       # Pydantic config schema, loader, hot-reload watcher

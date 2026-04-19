@@ -412,11 +412,13 @@ class WeChatPersonalClient:
                 _login_deadline = threading.Event()
 
                 def _stop_login_loop():
-                    if not _login_deadline.wait(timeout=180):
+                    from pyclaw.constants import WECHAT_PERSONAL_LOGIN_TIMEOUT_SECONDS
+                    if not _login_deadline.wait(timeout=WECHAT_PERSONAL_LOGIN_TIMEOUT_SECONDS):
                         if not self._logged_in:
                             logger.warning(
-                                "WeChat login timed out after 3 minutes, "
-                                "interrupting itchat login loop"
+                                "WeChat login timed out after %d seconds, "
+                                "interrupting itchat login loop",
+                                WECHAT_PERSONAL_LOGIN_TIMEOUT_SECONDS,
                             )
                             _core.isLogging = False
 

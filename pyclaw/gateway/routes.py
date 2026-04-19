@@ -250,30 +250,50 @@ def create_channels_router() -> APIRouter:
         })
 
         # Check WeChat Personal
+        wechat_enabled = False
         try:
-            from pyclaw.channels.wechat_personal.client import WeChatPersonalClient
-            wechat_client = WeChatPersonalClient.get_instance()
-            wechat_status = wechat_client.get_status()
-            wechat_connected = wechat_status.get("logged_in", False)
-            channels.append({
-                "id": "wechat_personal",
-                "name": "WeChat",
-                "icon": "💚",
-                "connected": wechat_connected,
-                "user_count": wechat_status.get("session_count", 0),
-                "status": "connected" if wechat_connected else "ready",
-                "nickname": wechat_status.get("nickname", ""),
-                "has_qrcode": wechat_status.get("has_qrcode", False),
-            })
-        except ImportError:
+            from pyclaw.config.loader import load_config as _load_wechat_cfg
+            wechat_enabled = _load_wechat_cfg().channels.wechat_personal_connector.enabled
+        except Exception:
+            pass
+
+        if not wechat_enabled:
             channels.append({
                 "id": "wechat_personal",
                 "name": "WeChat",
                 "icon": "💚",
                 "connected": False,
                 "user_count": 0,
-                "status": "not_installed",
+                "status": "disabled",
+                "enabled": False,
             })
+        else:
+            try:
+                from pyclaw.channels.wechat_personal.client import WeChatPersonalClient
+                wechat_client = WeChatPersonalClient.get_instance()
+                wechat_status = wechat_client.get_status()
+                wechat_connected = wechat_status.get("logged_in", False)
+                channels.append({
+                    "id": "wechat_personal",
+                    "name": "WeChat",
+                    "icon": "💚",
+                    "connected": wechat_connected,
+                    "user_count": wechat_status.get("session_count", 0),
+                    "status": "connected" if wechat_connected else "ready",
+                    "enabled": True,
+                    "nickname": wechat_status.get("nickname", ""),
+                    "has_qrcode": wechat_status.get("has_qrcode", False),
+                })
+            except ImportError:
+                channels.append({
+                    "id": "wechat_personal",
+                    "name": "WeChat",
+                    "icon": "💚",
+                    "connected": False,
+                    "user_count": 0,
+                    "status": "not_installed",
+                    "enabled": True,
+                })
 
         # Reserve other channels
         for channel_id, name, icon in [
@@ -320,6 +340,15 @@ def create_channels_router() -> APIRouter:
     async def wechat_personal_login():
         """Start WeChat login process, return QR code base64"""
         try:
+            from pyclaw.config.loader import load_config as _load_cfg
+            _cfg = _load_cfg()
+            if not _cfg.channels.wechat_personal_connector.enabled:
+                return {
+                    "status": "disabled",
+                    "qrcode": None,
+                    "error": "WeChat Personal channel is disabled. Enable it in pyclaw.json first.",
+                }
+
             from pyclaw.channels.wechat_personal.client import WeChatPersonalClient
             client = WeChatPersonalClient.get_instance()
 

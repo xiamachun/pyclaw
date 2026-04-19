@@ -159,6 +159,7 @@ class DingTalkConnectorConfig(BaseModel):
     gateway_token: Optional[str] = Field(default=None, alias="gatewayToken", description="Gateway 认证 token")
     gateway_password: Optional[str] = Field(default=None, alias="gatewayPassword", description="Gateway 认证密码（与 token 二选一）")
     session_timeout: int = Field(default=1800000, alias="sessionTimeout", description="会话超时(ms)，默认 30 分钟")
+    request_timeout: int = Field(default=960000, alias="requestTimeout", description="HTTP request timeout in ms (default 960s = 16min)")
 
 
 class WeChatConnectorConfig(BaseModel):
@@ -188,6 +189,12 @@ class WeComConnectorConfig(BaseModel):
     gateway_token: Optional[str] = Field(default=None, alias="gatewayToken", description="Gateway auth token")
     session_timeout: int = Field(default=1800000, alias="sessionTimeout", description="Session timeout in ms (default 30 min)")
     request_timeout: int = Field(default=960000, alias="requestTimeout", description="HTTP request timeout in ms (default 960s = 16min)")
+
+class WeChatPersonalConnectorConfig(BaseModel):
+    """WeChat Personal channel configuration."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool = Field(default=False, description="Enable WeChat Personal channel")
 
 class FeishuConnectorConfig(BaseModel):
     """飞书通道配置 (预留)"""
@@ -229,6 +236,11 @@ class ChannelsConfig(BaseModel):
         default_factory=WeComConnectorConfig,
         alias="wecom-connector",
         description="WeCom (Enterprise WeChat) channel"
+    )
+    wechat_personal_connector: WeChatPersonalConnectorConfig = Field(
+        default_factory=WeChatPersonalConnectorConfig,
+        alias="wechat-personal",
+        description="WeChat Personal channel"
     )
     feishu_connector: FeishuConnectorConfig = Field(
         default_factory=FeishuConnectorConfig,

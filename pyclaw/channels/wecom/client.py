@@ -36,6 +36,7 @@ import httpx
 from aiohttp import web
 
 from pyclaw.channels.gateway_client import resolve_and_chat
+from pyclaw.channels.message_formatter import format_for_wecom
 from pyclaw.channels.wecom.crypto import WeComCrypto
 from pyclaw.constants import DEFAULT_GATEWAY_URL
 
@@ -552,7 +553,9 @@ class WeComClient:
             )
 
             if reply:
-                await self._send_text_message(user_id, reply)
+                chunks = format_for_wecom(reply)
+                for chunk in chunks:
+                    await self._send_text_message(user_id, chunk)
                 self._save_sessions()
             else:
                 logger.warning("No reply from Gateway for user %s", user_id)
